@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Camera, Plus, Trash2, Users, Receipt, CreditCard, ChevronRight, Loader2, Image as ImageIcon, Pencil, FileText, FolderOpen, CheckCircle2, X, Check, PieChart, ChevronDown, MapPin, AlignLeft, Smartphone, Wallet, Settings2, CalendarDays } from 'lucide-react';
+import { Camera, Plus, Trash2, Users, Receipt, CreditCard, ChevronRight, Loader2, Image as ImageIcon, Pencil, FileText, FolderOpen, CheckCircle2, X, Check, PieChart, ChevronDown, MapPin, AlignLeft, Smartphone, Wallet, Settings2, Calendar } from 'lucide-react';
 
 // Firebase 初始化
 import { initializeApp } from 'firebase/app';
@@ -61,8 +61,6 @@ const App = () => {
   const [editingId, setEditingId] = useState(null);
   const [settlementCurrency, setSettlementCurrency] = useState('TWD');
   const [summaryCurrency, setSummaryCurrency] = useState('TWD');
-  
-  // 明細清單的月份篩選狀態
   const [selectedMonth, setSelectedMonth] = useState('all');
 
   const [editingTripId, setEditingTripId] = useState(null);
@@ -118,10 +116,6 @@ const App = () => {
     const expensesRef = collection(db, 'artifacts', appId, 'public', 'data', `expenses_${activeTripId}`);
     const unsubExpenses = onSnapshot(expensesRef, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ dbId: doc.id, ...doc.data() }));
-      data.sort((a, b) => {
-        if (a.date !== b.date) return new Date(b.date) - new Date(a.date);
-        return (b.created_at || 0) - (a.created_at || 0);
-      });
       setExpenses(data);
     });
 
@@ -135,6 +129,16 @@ const App = () => {
     const trip = trips.find(t => t.id === activeTripId);
     return trip ? String(trip.name) : '未選取帳本';
   }, [trips, activeTripId]);
+
+  const availableMonths = useMemo(() => {
+    const months = new Set(expenses.map(exp => exp.date.substring(0, 7)));
+    return Array.from(months).sort((a, b) => b.localeCompare(a));
+  }, [expenses]);
+
+  const filteredExpenses = useMemo(() => {
+    if (selectedMonth === 'all') return expenses;
+    return expenses.filter(exp => exp.date.startsWith(selectedMonth));
+  }, [expenses, selectedMonth]);
 
   const handleCreateTrip = async () => {
     if (!newTripName || !user) return;
@@ -283,16 +287,6 @@ const App = () => {
     const targetRate = rates[summaryCurrency] || 1;
     return { byCurrency: totalsByCurrency, grandTotalTarget: grandTotalTWD / targetRate };
   }, [expenses, summaryCurrency, rates]);
-
-  const availableMonths = useMemo(() => {
-    const months = new Set(expenses.map(e => e.date.substring(0, 7))); // 擷取 YYYY-MM
-    return Array.from(months).sort((a, b) => b.localeCompare(a)); // 排序：最新在上
-  }, [expenses]);
-
-  const filteredExpenses = useMemo(() => {
-    if (selectedMonth === 'all') return expenses;
-    return expenses.filter(e => e.date.startsWith(selectedMonth));
-  }, [expenses, selectedMonth]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -490,36 +484,34 @@ const App = () => {
 
           <div className="md:col-span-2 space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-[#E5E7EB]">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 font-bold">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 font-bold">
                 <div className="flex items-center gap-2 text-gray-500 font-bold">
                   <Receipt size={18} /><h2>支出明細</h2>
                 </div>
-                {/* 年月過濾選單 */}
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <CalendarDays size={14} className="absolute left-2 top-2 text-gray-400" />
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <div className="relative flex-1 sm:flex-none">
+                    <Calendar size={14} className="absolute left-2.5 top-1.5 text-gray-400" />
                     <select 
                       value={selectedMonth} 
                       onChange={e => setSelectedMonth(e.target.value)} 
-                      className="bg-gray-50 border border-gray-200 text-xs pl-7 pr-3 py-1.5 rounded-md font-bold outline-none cursor-pointer focus:border-blue-400 appearance-none"
+                      className="w-full sm:w-auto pl-8 pr-2 py-1 bg-gray-50 border border-gray-100 text-xs rounded font-bold outline-none cursor-pointer appearance-none"
                     >
                       <option value="all">全部時間</option>
-                      {availableMonths.map(m => {
-                        const parts = m.split('-');
-                        return <option key={m} value={m}>{parts[0]}年 {parts[1]}月</option>;
-                      })}
+                      {availableMonths.map(m => (
+                        <option key={m} value={m}>{m.replace('-', '年')}月</option>
+                      ))}
                     </select>
                   </div>
-                  <div className="text-[10px] text-gray-400 bg-gray-50 px-2 py-1.5 rounded font-black border border-gray-100">
-                    共 {filteredExpenses.length} 筆
-                  </div>
+                  <div className="text-[10px] text-gray-400 bg-gray-50 px-2 py-1.5 rounded font-black whitespace-nowrap">共 {filteredExpenses.length} 筆</div>
                 </div>
               </div>
               <div className="space-y-4">
-                {filteredExpenses.length === 0 ? <div className="text-center py-16 text-gray-300 font-bold"><Receipt size={40} className="mx-auto mb-2 opacity-20" /><p>所選時間內尚無紀錄</p></div> : 
+                {filteredExpenses.length === 0 ? <div className="text-center py-16 text-gray-300 font-bold"><Receipt size={40} className="mx-auto mb-2 opacity-20" /><p>尚無支出紀錄</p></div> : 
                   filteredExpenses.map(exp => (
                     <div key={exp.dbId} className="flex items-center gap-4 p-4 border border-gray-50 rounded-xl hover:bg-gray-50 group transition-all">
-                      <div className="w-14 h-14 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-gray-200 shrink-0 shadow-sm overflow-hidden">{exp.previewUrl ? <img src={exp.previewUrl} className="w-full h-full object-cover" /> : <ImageIcon size={24} />}</div>
+                      <div className="w-14 h-14 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-gray-200 shrink-0 shadow-sm overflow-hidden">
+                        {exp.previewUrl ? <img src={exp.previewUrl} className="w-full h-full object-cover" alt="receipt" /> : <ImageIcon size={24} />}
+                      </div>
                       <div className="flex-1 min-w-0 font-bold">
                         <div className="text-[10px] text-gray-400 mb-1 flex items-center flex-wrap gap-2">
                           <span className="bg-gray-100 px-1.5 py-0.5 rounded">{exp.date}</span>
@@ -539,7 +531,11 @@ const App = () => {
                       <div className="text-right font-bold">
                         <div className="text-base font-black text-gray-700">{exp.currency} {Math.round(exp.amount).toLocaleString()}</div>
                         <div className="flex gap-3 justify-end mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => { setFormData({ ...exp, location: exp.location || '', remarks: exp.remarks || '', paymentMethod: exp.paymentMethod || '現金' }); setEditingId(exp.dbId); setShowAddModal(true); }} className="text-blue-400 hover:text-blue-600"><Pencil size={16} /></button>
+                          <button onClick={() => { 
+                            setFormData({ ...exp, location: exp.location || '', remarks: exp.remarks || '', paymentMethod: exp.paymentMethod || '現金' }); 
+                            setEditingId(exp.dbId); 
+                            setShowAddModal(true); 
+                          }} className="text-blue-400 hover:text-blue-600"><Pencil size={16} /></button>
                           <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', `expenses_${activeTripId}`, exp.dbId))} className="text-red-300 hover:text-red-500"><Trash2 size={16} /></button>
                         </div>
                       </div>
@@ -604,7 +600,6 @@ const App = () => {
             </div>
             
             <div className="p-4 space-y-3 overflow-y-auto">
-              {/* Row 1: Image & Basic Info */}
               <div className="flex gap-4 items-center">
                 <div className="relative group w-16 h-16 shrink-0 font-bold">
                   <input type="file" id="img-up" className="hidden" onChange={handleFileUpload} />
@@ -622,13 +617,11 @@ const App = () => {
                 </div>
               </div>
 
-              {/* Row 2: Location & Remarks */}
               <div className="grid grid-cols-1 gap-2 font-bold">
                 <div className="relative font-bold"><MapPin size={12} className="absolute left-2.5 top-2.5 text-gray-400" /><input value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} placeholder="地點" className="w-full pl-8 pr-2 py-2 border border-gray-100 rounded-lg bg-gray-50 focus:border-blue-500 outline-none text-xs font-bold" /></div>
-                <div className="relative font-bold"><AlignLeft size={12} className="absolute left-2.5 top-2.5 text-gray-400" /><textarea value={formData.remarks} onChange={e => setFormData({...formData, remarks: e.target.value.slice(0, 50)})} placeholder="備註 (最多50字)" rows={2} maxLength={50} className="w-full pl-8 pr-2 py-2 border border-gray-100 rounded-lg bg-gray-50 focus:border-blue-500 outline-none text-xs resize-none font-bold" /></div>
+                <div className="relative font-bold"><AlignLeft size={12} className="absolute left-2.5 top-2.5 text-gray-400" /><input value={formData.remarks} onChange={e => setFormData({...formData, remarks: e.target.value.slice(0, 50)})} placeholder="備註 (50字內)" maxLength={50} className="w-full pl-8 pr-2 py-2 border border-gray-100 rounded-lg bg-gray-50 focus:border-blue-500 outline-none text-xs font-bold" /></div>
               </div>
 
-              {/* Row 3: Grid Selection */}
               <div className="grid grid-cols-2 gap-3 text-xs font-bold font-bold">
                 <div><label className="text-gray-400 text-[9px] block mb-1 uppercase font-bold">分類</label><select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full border border-gray-100 rounded-lg p-2 bg-gray-50 cursor-pointer font-bold">{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
                 <div><label className="text-gray-400 text-[9px] block mb-1 uppercase font-bold">支付方式</label><select value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value})} className="w-full border border-gray-100 rounded-lg p-2 bg-gray-50 cursor-pointer font-bold">{PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
@@ -638,7 +631,6 @@ const App = () => {
 
               <div><label className="text-gray-400 text-[9px] block mb-1 uppercase font-bold">日期</label><input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full border border-gray-100 rounded-lg p-2 bg-gray-50 text-xs font-bold" /></div>
 
-              {/* Participants */}
               <div className="space-y-2 font-bold">
                 <label className="text-gray-400 text-[9px] block uppercase font-bold">參與者</label>
                 <div className="flex flex-wrap gap-1.5 font-bold">
@@ -646,7 +638,6 @@ const App = () => {
                 </div>
               </div>
 
-              {/* Estimation Box */}
               {formData.amount && formData.participants.length > 0 && (
                 <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3 space-y-2 font-bold">
                   <div className="flex items-center gap-1.5 text-blue-500 font-bold"><PieChart size={12} /><span className="text-[10px] uppercase font-black">預估分擔 ({formData.currency})</span></div>
