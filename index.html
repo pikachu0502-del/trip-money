@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>旅遊分帳</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     body { -webkit-tap-highlight-color: transparent; }
@@ -15,26 +17,41 @@
     .loading-overlay { display: none; }
     .loading-overlay.active { display: flex; position: absolute; inset: 0; background: rgba(255,255,255,0.7); align-items: center; justify-content: center; z-index: 20; border-radius: 0.75rem; }
     [x-hidden] { display: none !important; }
+    .pagetab, #currentTripName, .listtab { white-space: nowrap; }
+    a { color: #3B82F6; }
+    a:hover { color: #2563eb; }
   </style>
 </head>
-<body class="bg-[#F9FAFB] text-[#4B5563] font-bold min-h-screen p-4 md:p-8">
+<body class="bg-[#F9FAFB] text-[#4B5563] font-bold min-h-screen">
 
-  <div id="mainApp" class="max-w-4xl mx-auto" x-hidden>
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 bg-white p-6 rounded-xl shadow-sm border border-[#E5E7EB]">
-      <button onclick="window.openModal('tripModal')" title="更換帳本" class="flex items-center gap-3 text-[#3B82F6] hover:bg-blue-50 px-4 py-2.5 rounded-lg border border-blue-100 transition-all bg-white shadow-sm">
-        <i data-lucide="folder-open" class="w-5 h-5"></i>
-        <div class="text-left">
-          <span class="block text-[10px] text-blue-400 uppercase tracking-wider">目前帳本</span>
-          <span id="currentTripName" class="text-lg leading-none">載入中...</span>
-        </div>
-      </button>
-      <button onclick="window.openAddExpense()" class="bg-[#3B82F6] text-white px-6 py-3 rounded-lg flex items-center gap-2 hover:bg-blue-600 shadow-lg transition-all active:scale-95">
-        <i data-lucide="plus" class="w-5 h-5"></i> 新增支出
+  <div id="mainApp" class="max-w-[480px] mx-auto px-4 pt-2 pb-28" x-hidden>
+    <!-- Header (sticky) -->
+    <div class="sticky top-0 z-30 -mx-4 px-4 py-2.5 bg-[#F9FAFB]/90 backdrop-blur mb-4 flex justify-center">
+      <button onclick="window.openModal('tripModal')" title="更換帳本" class="flex items-center gap-2 text-[#3B82F6] hover:bg-blue-50 px-4 py-2 rounded-full border border-blue-100 transition-all bg-white shadow-sm">
+        <i data-lucide="folder-open" class="w-4 h-4"></i>
+        <span id="currentTripName" class="text-sm leading-none">載入中...</span>
+        <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-blue-300"></i>
       </button>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+    <!-- 首頁目次 -->
+    <div id="pageHome" x-hidden>
+      <div class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-5 overflow-hidden relative">
+        <div class="flex justify-between items-start gap-4">
+          <div class="min-w-0">
+            <div class="text-[10px] text-blue-400 uppercase tracking-widest font-black mb-1">TRIP</div>
+            <div id="homeDest" class="text-2xl font-black text-gray-800 truncate">—</div>
+            <div id="homeDates" class="text-sm text-gray-400 font-bold mt-1">—</div>
+          </div>
+          <button onclick="window.openTripSettings()" title="旅程設定" class="shrink-0 text-gray-400 hover:text-blue-500 bg-gray-50 hover:bg-blue-50 p-2.5 rounded-lg transition-all"><i data-lucide="settings" class="w-5 h-5"></i></button>
+        </div>
+        <div id="homeCountdown" class="mt-5"></div>
+        <div id="homeWeather" class="mt-5"></div>
+      </div>
+      <div id="homeTiles" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+    </div>
+
+    <div id="tripContent" x-hidden class="grid grid-cols-1 gap-5">
       <div class="space-y-6">
         <!-- 成員 -->
         <div class="bg-white p-6 rounded-xl shadow-sm border border-[#E5E7EB]">
@@ -71,7 +88,7 @@
       </div>
 
       <!-- 支出明細 -->
-      <div class="md:col-span-2 space-y-6">
+      <div class="space-y-6">
         <div class="bg-white p-6 rounded-xl shadow-sm border border-[#E5E7EB]">
           <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-2 text-gray-500"><i data-lucide="receipt" class="w-4 h-4"></i><h2>支出明細</h2></div>
@@ -84,6 +101,96 @@
         </div>
       </div>
     </div>
+
+    <!-- 航班頁面 -->
+    <div id="flightsContent" x-hidden class="max-w-2xl mx-auto">
+      <div class="flex items-center justify-between mb-6 px-1">
+        <div>
+          <h1 class="text-2xl font-black text-gray-700">航班</h1>
+          <p id="flightsSubtitle" class="text-sm text-gray-400 font-bold mt-1"></p>
+        </div>
+        <select id="flightMemberFilter" onchange="window.renderFlights()" title="成員篩選" class="bg-white border border-gray-100 shadow-sm text-xs px-3 py-2 rounded-lg font-bold outline-none cursor-pointer"></select>
+      </div>
+      <div id="flightsList" class="space-y-5"></div>
+    </div>
+
+    <!-- 行程頁面 -->
+    <div id="pageItinerary" x-hidden>
+      <div id="itinCountdown" class="mb-5"></div>
+      <div id="itineraryList" class="space-y-6"></div>
+    </div>
+
+    <!-- 地圖頁面 -->
+    <div id="pageMap" x-hidden>
+      <div id="mapLayerChips" class="flex gap-2 mb-4 overflow-x-auto pb-1"></div>
+      <div id="mapView" class="w-full h-[65vh] min-h-[420px] rounded-2xl overflow-hidden border border-gray-100 shadow-sm z-0"></div>
+      <p id="mapEmpty" class="text-center text-xs text-gray-300 font-bold mt-3"></p>
+    </div>
+
+    <!-- 清單頁面 -->
+    <div id="pageLists" x-hidden class="max-w-2xl mx-auto">
+      <div class="flex gap-2 mb-5">
+        <button id="listTabWish" onclick="window.setListType('wish')" class="listtab flex-1 px-4 py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-1.5 transition-all"><i data-lucide="sparkles" class="w-4 h-4"></i>願望清單</button>
+        <button id="listTabBuy" onclick="window.setListType('buy')" class="listtab flex-1 px-4 py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-1.5 transition-all"><i data-lucide="shopping-bag" class="w-4 h-4"></i>必買清單</button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-4 mb-4">
+        <div class="flex gap-2">
+          <input id="newListInput" type="text" placeholder="新增項目…" onkeydown="if(event.key==='Enter')window.addListItem()" class="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-gray-50 font-bold outline-none focus:border-blue-400" />
+          <select id="newListMember" title="誰的" class="border border-gray-200 rounded-lg px-2 text-xs bg-gray-50 font-bold outline-none cursor-pointer max-w-[90px]"></select>
+          <button onclick="window.addListItem()" title="新增" class="bg-[#3B82F6] text-white px-4 rounded-lg hover:bg-blue-600 shrink-0"><i data-lucide="plus" class="w-4 h-4"></i></button>
+        </div>
+      </div>
+      <div id="listProgress" class="mb-3"></div>
+      <div id="listItems" class="space-y-2"></div>
+    </div>
+
+    <!-- 匯率頁面 -->
+    <div id="pageRates" x-hidden class="max-w-lg mx-auto">
+      <div class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6">
+        <div class="flex items-center justify-between mb-1">
+          <div class="flex items-center gap-2 text-gray-500"><i data-lucide="arrow-right-left" class="w-4 h-4"></i><h2 class="font-black">即時匯率換算</h2></div>
+          <button onclick="window.loadLiveRates(true)" title="重新整理" class="text-blue-500 hover:text-blue-600 flex items-center gap-1 text-xs"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>更新</button>
+        </div>
+        <p id="rateUpdated" class="text-[10px] text-gray-400 font-bold mb-5">載入中…</p>
+
+        <div class="space-y-3">
+          <div class="flex gap-2">
+            <input id="convFromAmt" type="number" value="1000" oninput="window.convert('from')" class="flex-1 border border-gray-200 rounded-xl p-3 bg-gray-50 outline-none text-lg font-black focus:border-blue-400" />
+            <select id="convFrom" onchange="window.convert('from')" class="border border-gray-200 rounded-xl px-3 bg-gray-50 font-black outline-none cursor-pointer"></select>
+          </div>
+          <div class="flex justify-center"><i data-lucide="arrow-down" class="w-5 h-5 text-blue-300"></i></div>
+          <div class="flex gap-2">
+            <input id="convToAmt" type="number" oninput="window.convert('to')" class="flex-1 border border-gray-200 rounded-xl p-3 bg-blue-50 outline-none text-lg font-black text-blue-600 focus:border-blue-400" />
+            <select id="convTo" onchange="window.convert('from')" class="border border-gray-200 rounded-xl px-3 bg-gray-50 font-black outline-none cursor-pointer"></select>
+          </div>
+        </div>
+
+        <div id="rateQuickTable" class="mt-6 pt-5 border-t border-gray-50 space-y-2"></div>
+
+        <button onclick="window.applyLiveRatesToTrip()" class="w-full mt-6 bg-gray-50 hover:bg-blue-50 text-blue-500 border border-blue-100 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all"><i data-lucide="download" class="w-4 h-4"></i>套用即時匯率到此帳本記帳</button>
+      </div>
+    </div>
+    <!-- FAB 新增 -->
+    <div class="fixed bottom-0 left-0 right-0 z-40 pointer-events-none">
+      <div class="max-w-[480px] mx-auto relative h-0">
+        <button id="addExpenseBtn" onclick="window.openAddExpense()" title="新增支出" class="pointer-events-auto absolute right-4 bottom-[80px] w-14 h-14 rounded-full bg-[#3B82F6] text-white shadow-xl flex items-center justify-center active:scale-95"><i data-lucide="plus" class="w-6 h-6"></i></button>
+        <button id="addFlightBtn" onclick="window.openAddFlight()" x-hidden title="新增航班" class="pointer-events-auto absolute right-4 bottom-[80px] w-14 h-14 rounded-full bg-[#3B82F6] text-white shadow-xl flex items-center justify-center active:scale-95"><i data-lucide="plus" class="w-6 h-6"></i></button>
+        <button id="addItinBtn" onclick="window.openAddItin()" x-hidden title="新增行程" class="pointer-events-auto absolute right-4 bottom-[80px] w-14 h-14 rounded-full bg-[#3B82F6] text-white shadow-xl flex items-center justify-center active:scale-95"><i data-lucide="plus" class="w-6 h-6"></i></button>
+      </div>
+    </div>
+
+    <!-- 底部導覽 -->
+    <nav class="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur border-t border-gray-100 shadow-[0_-2px_12px_rgba(0,0,0,0.04)]">
+      <div class="max-w-[480px] mx-auto flex">
+        <button id="tab_home" onclick="window.setPage('home')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="layout-grid" class="w-5 h-5"></i><span class="text-[10px] font-black">首頁</span></button>
+        <button id="tab_trip" onclick="window.setPage('trip')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="wallet" class="w-5 h-5"></i><span class="text-[10px] font-black">記帳</span></button>
+        <button id="tab_flight" onclick="window.setPage('flight')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="plane" class="w-5 h-5"></i><span class="text-[10px] font-black">航班</span></button>
+        <button id="tab_itin" onclick="window.setPage('itin')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="calendar-days" class="w-5 h-5"></i><span class="text-[10px] font-black">行程</span></button>
+        <button id="tab_map" onclick="window.setPage('map')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="map" class="w-5 h-5"></i><span class="text-[10px] font-black">地圖</span></button>
+        <button id="tab_list" onclick="window.setPage('list')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="check-square" class="w-5 h-5"></i><span class="text-[10px] font-black">清單</span></button>
+        <button id="tab_rate" onclick="window.setPage('rate')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="arrow-right-left" class="w-5 h-5"></i><span class="text-[10px] font-black">匯率</span></button>
+      </div>
+    </nav>
   </div>
 
   <!-- 帳本 Modal -->
@@ -182,6 +289,110 @@
     </div>
   </div>
 
+  <!-- 新增/編輯航班 Modal -->
+  <div id="addFlightModal" class="modal !items-start sm:!items-center overflow-y-auto">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl my-4 overflow-hidden flex flex-col max-h-[94vh]">
+      <div class="p-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
+        <h2 id="flightModalTitle" class="text-base font-black text-gray-700">新增航班</h2>
+        <button onclick="window.closeModal('addFlightModal')" title="關閉"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-6 space-y-4 relative overflow-y-auto">
+        <div id="flightSaveLoader" class="loading-overlay"><i data-lucide="loader-2" class="w-8 h-8 animate-spin text-blue-500"></i></div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">方向</label><select id="flDirection" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"><option value="去程">去程</option><option value="回程">回程</option><option value="轉機">轉機</option></select></div>
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">成員</label><select id="flMember" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">航空公司</label><input id="flAirline" type="text" placeholder="DEMO AIR" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">航班編號</label><input id="flNumber" type="text" placeholder="XX 888" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+          <div class="col-span-2"><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">日期</label><input id="flDate" type="date" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+        </div>
+
+        <div class="bg-blue-50/40 border border-blue-100 rounded-2xl p-4 space-y-3">
+          <div class="flex items-center gap-1.5 text-blue-500"><i data-lucide="plane-takeoff" class="w-3.5 h-3.5"></i><span class="text-[10px] font-black uppercase tracking-wider">出發</span></div>
+          <div class="grid grid-cols-3 gap-3">
+            <div><label class="text-[10px] text-gray-400 block mb-1 font-bold">代碼</label><input id="flFromCode" type="text" maxlength="4" placeholder="TPE" oninput="this.value=this.value.toUpperCase()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-white outline-none font-black" /></div>
+            <div><label class="text-[10px] text-gray-400 block mb-1 font-bold">航廈/地名</label><input id="flFromName" type="text" placeholder="桃園 T2" class="w-full border border-gray-200 rounded-xl p-2.5 bg-white outline-none font-bold" /></div>
+            <div><label class="text-[10px] text-gray-400 block mb-1 font-bold">時間</label><input id="flDepTime" type="time" class="w-full border border-gray-200 rounded-xl p-2.5 bg-white outline-none font-bold" /></div>
+          </div>
+        </div>
+
+        <div class="bg-blue-50/40 border border-blue-100 rounded-2xl p-4 space-y-3">
+          <div class="flex items-center gap-1.5 text-blue-500"><i data-lucide="plane-landing" class="w-3.5 h-3.5"></i><span class="text-[10px] font-black uppercase tracking-wider">抵達</span></div>
+          <div class="grid grid-cols-3 gap-3">
+            <div><label class="text-[10px] text-gray-400 block mb-1 font-bold">代碼</label><input id="flToCode" type="text" maxlength="4" placeholder="CTS" oninput="this.value=this.value.toUpperCase()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-white outline-none font-black" /></div>
+            <div><label class="text-[10px] text-gray-400 block mb-1 font-bold">航廈/地名</label><input id="flToName" type="text" placeholder="新千歲" class="w-full border border-gray-200 rounded-xl p-2.5 bg-white outline-none font-bold" /></div>
+            <div><label class="text-[10px] text-gray-400 block mb-1 font-bold">時間</label><input id="flArrTime" type="time" class="w-full border border-gray-200 rounded-xl p-2.5 bg-white outline-none font-bold" /></div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">飛行時間</label><input id="flDuration" type="text" placeholder="留空自動計算" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">訂位代號</label><input id="flPnr" type="text" placeholder="選填" oninput="this.value=this.value.toUpperCase()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+        </div>
+        <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">備註</label><input id="flNote" type="text" maxlength="40" placeholder="抵達後租車 / JR 進市區" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+      </div>
+      <div class="p-4 border-t border-gray-50 shrink-0 flex gap-3">
+        <button id="flightDeleteBtn" onclick="window.deleteFlight()" x-hidden class="px-5 py-3.5 rounded-xl font-black text-red-500 bg-red-50 hover:bg-red-100"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+        <button id="flightSaveBtn" onclick="window.saveFlight()" class="flex-1 bg-[#3B82F6] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 disabled:bg-gray-300 flex justify-center items-center gap-2 transition-colors">確認儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新增/編輯行程 Modal -->
+  <div id="addItinModal" class="modal !items-start sm:!items-center overflow-y-auto">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl my-4 overflow-hidden flex flex-col max-h-[94vh]">
+      <div class="p-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
+        <h2 id="itinModalTitle" class="text-base font-black text-gray-700">新增行程</h2>
+        <button onclick="window.closeModal('addItinModal')" title="關閉"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-6 space-y-4 relative overflow-y-auto">
+        <div id="itinSaveLoader" class="loading-overlay"><i data-lucide="loader-2" class="w-8 h-8 animate-spin text-blue-500"></i></div>
+        <input id="itTitle" type="text" placeholder="行程名稱（例：小樽運河）" class="w-full border-b-2 border-gray-100 py-1 focus:border-blue-500 outline-none text-lg bg-transparent font-bold" />
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">日期</label><input id="itDate" type="date" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">時間</label><input id="itTime" type="time" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+          <div class="col-span-2"><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">類型</label><select id="itType" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
+        </div>
+        <div class="relative"><i data-lucide="map-pin" class="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400"></i><input id="itLocation" type="text" placeholder="地點（用於地圖定位與導航）" class="w-full pl-9 pr-2 py-2.5 border border-gray-100 rounded-lg bg-gray-50 focus:border-blue-500 outline-none text-sm font-bold" /></div>
+        <div class="relative"><i data-lucide="align-left" class="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400"></i><input id="itNote" maxlength="60" type="text" placeholder="備註（60字內）" class="w-full pl-9 pr-2 py-2.5 border border-gray-100 rounded-lg bg-gray-50 focus:border-blue-500 outline-none text-sm font-bold" /></div>
+      </div>
+      <div class="p-4 border-t border-gray-50 shrink-0 flex gap-3">
+        <button id="itinDeleteBtn" onclick="window.deleteItin()" x-hidden class="px-5 py-3.5 rounded-xl font-black text-red-500 bg-red-50 hover:bg-red-100"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+        <button id="itinSaveBtn" onclick="window.saveItin()" class="flex-1 bg-[#3B82F6] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 disabled:bg-gray-300 flex justify-center items-center gap-2 transition-colors">確認儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 旅程設定 Modal -->
+  <div id="tripSettingsModal" class="modal !items-start sm:!items-center overflow-y-auto">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl my-4 overflow-hidden flex flex-col max-h-[94vh]">
+      <div class="p-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
+        <h2 class="text-base font-black text-gray-700 flex items-center gap-2"><i data-lucide="settings" class="w-4 h-4"></i>旅程設定</h2>
+        <button onclick="window.closeModal('tripSettingsModal')" title="關閉"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-6 space-y-4 relative overflow-y-auto">
+        <div id="metaSaveLoader" class="loading-overlay"><i data-lucide="loader-2" class="w-8 h-8 animate-spin text-blue-500"></i></div>
+        <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">目的地（天氣與地圖以此為準）</label><input id="metaDest" type="text" placeholder="例：北海道 札幌" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">出發日</label><input id="metaStart" type="date" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">回程日</label><input id="metaEnd" type="date" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+        </div>
+        <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">主要外幣（匯率換算預設）</label><select id="metaCurrency" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
+
+        <div class="pt-2">
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1"><i data-lucide="bed-double" class="w-3.5 h-3.5"></i>住宿（行程頁色帶）</label>
+          </div>
+          <div id="lodgingEditList" class="space-y-2 mb-2"></div>
+          <button onclick="window.addLodgingRow()" class="w-full border-2 border-dashed border-gray-200 text-gray-400 hover:text-blue-500 hover:border-blue-300 rounded-xl py-2 text-xs font-black flex items-center justify-center gap-1 transition-all"><i data-lucide="plus" class="w-3.5 h-3.5"></i>新增一間住宿</button>
+        </div>
+      </div>
+      <div class="p-4 border-t border-gray-50 shrink-0">
+        <button onclick="window.saveTripMeta()" class="w-full bg-[#3B82F6] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 flex justify-center items-center gap-2">儲存旅程設定</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -219,6 +430,26 @@
     const PAYMENT_METHODS = ['現金', '信用卡', '行動支付'];
     const SPLIT_METHODS = ['平分', '代墊', '請客', '自訂金額'];
 
+    // 行程類型 → 顏色 / 圖示 / 地圖圖層
+    const ITIN_TYPES = {
+      '景點': { color: '#f59e0b', icon: 'camera', layer: 'sight' },
+      '餐廳': { color: '#ef4444', icon: 'utensils', layer: 'food' },
+      '交通': { color: '#3b82f6', icon: 'train-front', layer: 'other' },
+      '住宿': { color: '#8b5cf6', icon: 'bed-double', layer: 'stay' },
+      '購物': { color: '#ec4899', icon: 'shopping-bag', layer: 'other' },
+      '其他': { color: '#6b7280', icon: 'map-pin', layer: 'other' }
+    };
+    const LODGE_COLORS = ['#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#6366f1'];
+    const PAGE_MAP = {
+      home:   { el: 'pageHome',        tab: 'tab_home',   add: null },
+      trip:   { el: 'tripContent',     tab: 'tab_trip',   add: 'addExpenseBtn' },
+      flight: { el: 'flightsContent',  tab: 'tab_flight', add: 'addFlightBtn' },
+      itin:   { el: 'pageItinerary',   tab: 'tab_itin',   add: 'addItinBtn' },
+      map:    { el: 'pageMap',         tab: 'tab_map',    add: null },
+      list:   { el: 'pageLists',       tab: 'tab_list',   add: null },
+      rate:   { el: 'pageRates',       tab: 'tab_rate',   add: null }
+    };
+
     // ===== state =====
     let isAuthed = false;
     let activeTripId = null;
@@ -227,6 +458,18 @@
     let expenses = [];
     let rates = { ...DEFAULT_RATES };
     let expensesCache = {};
+    let flights = [];
+    let flightsCache = {};
+    let tripMeta = {};
+    let itinerary = [];
+    let itineraryCache = {};
+    let lists = [];
+    let listsCache = {};
+    let editingItinId = null;
+    let listType = 'wish';
+    let lodgingDraft = [];
+    let liveRates = null;
+    let mapLayerOn = { stay: true, sight: true, food: true, other: true, spend: true };
     // form state
     let editingId = null;
     let participants = [];
@@ -235,9 +478,17 @@
     let expandedTransferKey = null;
     let editingTripId = null;
     let selectedMonth = 'all';
+    let currentView = 'list';
+    let currentPage = 'trip';
+    let editingFlightId = null;
+    let map = null;
+    let mapMarkers = [];
     // listeners
     let unsubSettings = null;
     let unsubExpenses = null;
+    let unsubFlights = null;
+    let unsubItin = null;
+    let unsubLists = null;
 
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -288,10 +539,14 @@
       // 進入帳本內部頁面
       $('mainApp').removeAttribute('x-hidden');
       updateTripModalChrome();
+      window.setPage('home');
       renderTrips();
 
       if (unsubSettings) unsubSettings();
       if (unsubExpenses) unsubExpenses();
+      if (unsubFlights) unsubFlights();
+      if (unsubItin) unsubItin();
+      if (unsubLists) unsubLists();
 
       const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'trip_settings', activeTripId);
       unsubSettings = onSnapshot(settingsRef, (d) => {
@@ -299,12 +554,17 @@
           const data = d.data();
           people = Array.isArray(data.people) ? data.people : [];
           rates = data.rates ? { ...DEFAULT_RATES, ...data.rates } : { ...DEFAULT_RATES };
+          tripMeta = data.meta || {};
         } else {
-          people = []; rates = { ...DEFAULT_RATES };
+          people = []; rates = { ...DEFAULT_RATES }; tripMeta = {};
           setDoc(settingsRef, { people: [], rates: DEFAULT_RATES });
         }
         renderPeople();
         window.refreshUI();
+        window.renderFlights();
+        renderHome();
+        renderItinerary();
+        fetchWeather();
       });
 
       const expensesRef = collection(db, 'artifacts', appId, 'public', 'data', `expenses_${activeTripId}`);
@@ -318,14 +578,350 @@
         expenses.sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : (b.created_at || 0) - (a.created_at || 0)));
         window.refreshUI();
       });
+
+      const flightsRef = collection(db, 'artifacts', appId, 'public', 'data', `flights_${activeTripId}`);
+      unsubFlights = onSnapshot(flightsRef, (snap) => {
+        flightsCache = {};
+        flights = snap.docs.map(d => {
+          const data = { dbId: d.id, ...d.data() };
+          flightsCache[d.id] = data;
+          return data;
+        });
+        flights.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : (a.depTime > b.depTime ? 1 : -1)));
+        window.renderFlights();
+        renderHome();
+      });
+
+      const itinRef = collection(db, 'artifacts', appId, 'public', 'data', `itinerary_${activeTripId}`);
+      unsubItin = onSnapshot(itinRef, (snap) => {
+        itineraryCache = {};
+        itinerary = snap.docs.map(d => { const data = { dbId: d.id, ...d.data() }; itineraryCache[d.id] = data; return data; });
+        itinerary.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : ((a.time || '') > (b.time || '') ? 1 : -1)));
+        renderItinerary();
+        renderHome();
+        if (currentPage === 'map') renderMap();
+      });
+
+      const listsRef = collection(db, 'artifacts', appId, 'public', 'data', `lists_${activeTripId}`);
+      unsubLists = onSnapshot(listsRef, (snap) => {
+        listsCache = {};
+        lists = snap.docs.map(d => { const data = { dbId: d.id, ...d.data() }; listsCache[d.id] = data; return data; });
+        lists.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+        renderLists();
+        renderHome();
+      });
     };
 
     window.refreshUI = () => {
       renderExpenses();
       renderSummary();
       renderSettlement();
+      if (currentView === 'map') renderMap();
       icons();
     };
+
+    // ===== 頁面切換 =====
+    const TAB_ON = 'navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-blue-500';
+    const TAB_OFF = 'navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400';
+    window.setPage = (p) => {
+      if (!PAGE_MAP[p]) p = 'home';
+      currentPage = p;
+      Object.entries(PAGE_MAP).forEach(([key, cfg]) => {
+        $(cfg.el).toggleAttribute('x-hidden', key !== p);
+        $(cfg.tab).className = key === p ? TAB_ON : TAB_OFF;
+        if (cfg.add) $(cfg.add).toggleAttribute('x-hidden', !(cfg.add && key === p));
+      });
+      if (p === 'home') renderHome();
+      else if (p === 'flight') window.renderFlights();
+      else if (p === 'itin') renderItinerary();
+      else if (p === 'map') renderMap();
+      else if (p === 'list') renderLists();
+      else if (p === 'rate') renderRatesPage();
+      icons();
+    };
+
+    // ===== 航班 =====
+    function calcDuration(dep, arr) {
+      if (!dep || !arr) return '';
+      const [dh, dm] = dep.split(':').map(Number);
+      const [ah, am] = arr.split(':').map(Number);
+      let mins = (ah * 60 + am) - (dh * 60 + dm);
+      if (mins < 0) mins += 24 * 60;
+      const h = Math.floor(mins / 60), m = mins % 60;
+      return `${h}h${m ? ' ' + m + 'min' : ''}`;
+    }
+    const WD = ['日', '一', '二', '三', '四', '五', '六'];
+    function fmtDate(d) {
+      if (!d) return '';
+      const dt = new Date(d + 'T00:00:00');
+      return `${dt.getFullYear()}/${dt.getMonth() + 1}/${dt.getDate()} ${WD[dt.getDay()]}`;
+    }
+
+    window.renderFlights = () => {
+      const filter = $('flightMemberFilter');
+      const prevVal = filter.value || 'all';
+      filter.innerHTML = `<option value="all">全部成員</option>` + people.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+      filter.value = people.includes(prevVal) || prevVal === 'all' ? prevVal : 'all';
+      const who = filter.value;
+
+      const list = who === 'all' ? flights : flights.filter(f => f.member === who);
+      const dirs = [...new Set(list.map(f => `${f.fromCode || ''}→${f.toCode || ''}`))];
+      $('flightsSubtitle').innerText = list.length
+        ? (who === 'all' ? `共 ${list.length} 段航班` : `${who} · ${list.length} 段航班`)
+        : '尚無航班紀錄';
+
+      $('flightsList').innerHTML = list.length ? list.map(f => {
+        const dur = f.duration || calcDuration(f.depTime, f.arrTime);
+        return `<div onclick="window.editFlight('${f.dbId}')" class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 cursor-pointer hover:shadow-md hover:border-blue-200 transition-all">
+          <div class="flex justify-between items-center mb-5">
+            <div class="flex items-center gap-2 text-sm font-black text-[#3B82F6]">
+              <span>${esc(f.number || '航班')}</span>
+              <span class="text-gray-300">·</span>
+              <span class="text-gray-400 font-bold">${esc(f.direction || '')}</span>
+              ${who === 'all' && f.member ? `<span class="bg-blue-50 text-blue-400 text-[10px] px-2 py-0.5 rounded-full">${esc(f.member)}</span>` : ''}
+            </div>
+            <span class="text-sm text-gray-400 font-bold">${esc(fmtDate(f.date))}</span>
+          </div>
+          <div class="flex items-center justify-between gap-3">
+            <div class="text-4xl font-black text-gray-800 tracking-tight">${esc(f.fromCode || '—')}</div>
+            <div class="flex-1 flex flex-col items-center">
+              <span class="text-[11px] text-gray-400 font-bold mb-1">${esc(dur)}</span>
+              <div class="w-full flex items-center gap-1 text-blue-300">
+                <div class="flex-1 border-t border-dashed border-gray-200"></div>
+                <i data-lucide="plane" class="w-4 h-4 text-blue-400"></i>
+                <div class="flex-1 border-t border-dashed border-gray-200"></div>
+              </div>
+            </div>
+            <div class="text-4xl font-black text-gray-800 tracking-tight">${esc(f.toCode || '—')}</div>
+          </div>
+          <div class="flex justify-between items-baseline mt-2">
+            <div class="text-2xl font-black text-gray-700">${esc(f.depTime || '--:--')}</div>
+            <div class="text-2xl font-black text-gray-700">${esc(f.arrTime || '--:--')}</div>
+          </div>
+          <div class="flex justify-between text-sm text-gray-400 font-bold mt-1">
+            <span>${esc(f.fromName || '')}</span>
+            <span>${esc(f.toName || '')}</span>
+          </div>
+          ${(f.airline || f.note || f.pnr) ? `<div class="flex items-center gap-3 mt-4 pt-4 border-t border-gray-50 text-sm text-gray-400 font-bold flex-wrap">
+            ${f.airline ? `<span class="text-gray-500">${esc(f.airline)}</span>` : ''}
+            ${f.pnr ? `<span class="bg-gray-100 text-gray-500 text-[11px] px-2 py-0.5 rounded font-black tracking-wider">${esc(f.pnr)}</span>` : ''}
+            ${f.note ? `<span>${esc(f.note)}</span>` : ''}
+          </div>` : ''}
+        </div>`;
+      }).join('') : `<div class="text-center py-20 text-gray-300 font-bold bg-white rounded-2xl border border-gray-50"><i data-lucide="plane" class="w-10 h-10 mx-auto mb-2 opacity-20"></i><p>尚無航班，點右上「新增航班」</p></div>`;
+      icons();
+    };
+
+    function buildFlightMemberSelect() {
+      $('flMember').innerHTML = people.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+    }
+
+    window.openAddFlight = () => {
+      if (!activeTripId) { alert('請先選擇帳本'); return; }
+      if (!people.length) { alert('請先在「記帳」頁新增成員'); return; }
+      editingFlightId = null;
+      $('flightModalTitle').innerText = '新增航班';
+      $('flightDeleteBtn').setAttribute('x-hidden', '');
+      buildFlightMemberSelect();
+      $('flDirection').value = '去程';
+      $('flMember').value = people[0] || '';
+      $('flAirline').value = '';
+      $('flNumber').value = '';
+      $('flDate').value = new Date().toISOString().split('T')[0];
+      $('flFromCode').value = ''; $('flFromName').value = ''; $('flDepTime').value = '';
+      $('flToCode').value = ''; $('flToName').value = ''; $('flArrTime').value = '';
+      $('flDuration').value = ''; $('flPnr').value = ''; $('flNote').value = '';
+      window.openModal('addFlightModal');
+    };
+
+    window.editFlight = (id) => {
+      const f = flightsCache[id];
+      if (!f) return;
+      editingFlightId = id;
+      $('flightModalTitle').innerText = '編輯航班';
+      $('flightDeleteBtn').removeAttribute('x-hidden');
+      buildFlightMemberSelect();
+      $('flDirection').value = f.direction || '去程';
+      $('flMember').value = f.member || (people[0] || '');
+      $('flAirline').value = f.airline || '';
+      $('flNumber').value = f.number || '';
+      $('flDate').value = f.date || '';
+      $('flFromCode').value = f.fromCode || ''; $('flFromName').value = f.fromName || ''; $('flDepTime').value = f.depTime || '';
+      $('flToCode').value = f.toCode || ''; $('flToName').value = f.toName || ''; $('flArrTime').value = f.arrTime || '';
+      $('flDuration').value = f.duration || ''; $('flPnr').value = f.pnr || ''; $('flNote').value = f.note || '';
+      window.openModal('addFlightModal');
+    };
+
+    window.saveFlight = async () => {
+      if (!isAuthed || !activeTripId) return;
+      const number = $('flNumber').value.trim();
+      const fromCode = $('flFromCode').value.trim();
+      const toCode = $('flToCode').value.trim();
+      if (!fromCode || !toCode) { alert('請至少填寫出發與抵達機場代碼'); return; }
+      const btn = $('flightSaveBtn'); const loader = $('flightSaveLoader');
+      btn.disabled = true; loader.classList.add('active');
+      try {
+        const col = collection(db, 'artifacts', appId, 'public', 'data', `flights_${activeTripId}`);
+        const data = {
+          direction: $('flDirection').value,
+          member: $('flMember').value,
+          airline: $('flAirline').value.trim(),
+          number,
+          date: $('flDate').value,
+          fromCode, fromName: $('flFromName').value.trim(), depTime: $('flDepTime').value,
+          toCode, toName: $('flToName').value.trim(), arrTime: $('flArrTime').value,
+          duration: $('flDuration').value.trim(),
+          pnr: $('flPnr').value.trim(),
+          note: $('flNote').value.trim(),
+          updated_at: serverTimestamp()
+        };
+        if (editingFlightId) await updateDoc(doc(col, editingFlightId), data);
+        else await addDoc(col, data);
+        window.closeModal('addFlightModal');
+      } catch (err) {
+        console.error('航班儲存失敗', err);
+        alert('儲存失敗，請確認網路與 Firebase 權限');
+      } finally {
+        btn.disabled = false; loader.classList.remove('active');
+      }
+    };
+
+    window.deleteFlight = async () => {
+      if (!editingFlightId || !isAuthed) return;
+      if (!confirm('確定刪除此航班？')) return;
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', `flights_${activeTripId}`, editingFlightId));
+      window.closeModal('addFlightModal');
+    };
+
+    // ===== 地圖（Leaflet + Nominatim）=====
+    const CAT_COLOR = { '住宿': '#8b5cf6', '餐飲': '#ef4444', '交通': '#3b82f6', '購物': '#ec4899', '娛樂': '#f59e0b', '雜費': '#6b7280' };
+    const geoCache = {};
+
+    async function geocode(query) {
+      const key = query.toLowerCase();
+      if (geoCache[key]) return geoCache[key];
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+        const res = await fetch(url, { headers: { 'Accept-Language': 'zh-TW' } });
+        const arr = await res.json();
+        if (arr && arr.length) {
+          const g = { lat: parseFloat(arr[0].lat), lng: parseFloat(arr[0].lon) };
+          geoCache[key] = g;
+          return g;
+        }
+      } catch (err) { console.warn('地點定位失敗', query, err); }
+      return null;
+    }
+
+    const LAYER_META = {
+      stay:  { label: '住宿', color: '#8b5cf6', icon: 'bed-double' },
+      sight: { label: '景點', color: '#f59e0b', icon: 'camera' },
+      food:  { label: '餐廳', color: '#ef4444', icon: 'utensils' },
+      other: { label: '其他', color: '#6b7280', icon: 'map-pin' },
+      spend: { label: '消費', color: '#0ea5e9', icon: 'receipt' }
+    };
+
+    function navBtn(lat, lng, name) {
+      const q = name ? encodeURIComponent(name) : `${lat},${lng}`;
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${q}`;
+      return `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;background:#3B82F6;color:#fff;font-weight:800;font-size:11px;padding:5px 10px;border-radius:8px;text-decoration:none">🧭 Google Maps 導航</a>`;
+    }
+
+    function collectMapPoints() {
+      const pts = [];
+      itinerary.forEach(it => {
+        if (it.lat == null || it.lng == null || (it.lat === 0 && it.lng === 0)) return;
+        const layer = (ITIN_TYPES[it.type] || ITIN_TYPES['其他']).layer;
+        pts.push({ layer, lat: it.lat, lng: it.lng, title: it.title, sub: `${it.type || ''}${it.time ? ' · ' + it.time : ''}${it.date ? ' · ' + it.date : ''}`, loc: it.location });
+      });
+      (tripMeta.lodgings || []).forEach(l => {
+        if (l.lat == null || l.lng == null || (l.lat === 0 && l.lng === 0)) return;
+        pts.push({ layer: 'stay', lat: l.lat, lng: l.lng, title: l.name, sub: `住宿 · ${l.nights || 1} 晚`, loc: l.name });
+      });
+      expenses.forEach(e => {
+        if (e.lat == null || e.lng == null || (e.lat === 0 && e.lng === 0)) return;
+        pts.push({ layer: 'spend', lat: e.lat, lng: e.lng, title: e.note, sub: `${e.category || ''} · ${e.currency} ${Math.round(e.amount).toLocaleString()}`, loc: e.location });
+      });
+      return pts;
+    }
+
+    function renderLayerChips() {
+      const counts = {};
+      collectMapPoints().forEach(p => { counts[p.layer] = (counts[p.layer] || 0) + 1; });
+      $('mapLayerChips').innerHTML = Object.entries(LAYER_META).map(([key, m]) => {
+        const on = mapLayerOn[key];
+        return `<button onclick="window.toggleLayer('${key}')" class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black border transition-all ${on ? 'text-white shadow-sm' : 'bg-white text-gray-300 border-gray-100'}" style="${on ? `background:${m.color};border-color:${m.color}` : ''}">
+          <i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label} <span class="opacity-70">${counts[key] || 0}</span>
+        </button>`;
+      }).join('');
+    }
+    window.toggleLayer = (k) => { mapLayerOn[k] = !mapLayerOn[k]; renderMap(); };
+
+    function renderMap() {
+      if (!map) {
+        map = L.map('mapView', { scrollWheelZoom: true }).setView([25.03, 121.56], 4);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19, attribution: '© OpenStreetMap'
+        }).addTo(map);
+      }
+      renderLayerChips();
+      setTimeout(() => map.invalidateSize(), 60);
+      mapMarkers.forEach(m => map.removeLayer(m));
+      mapMarkers = [];
+
+      const pts = collectMapPoints().filter(p => mapLayerOn[p.layer]);
+      if (!pts.length) {
+        $('mapEmpty').innerText = '尚無帶座標的地點。到「行程」新增含地點的項目，或在「旅程設定」填住宿地點即會自動定位。';
+        icons(); return;
+      }
+      $('mapEmpty').innerText = `地圖上共 ${pts.length} 個地點・點圖釘看詳情與導航`;
+
+      const bounds = [];
+      pts.forEach(p => {
+        const color = LAYER_META[p.layer].color;
+        const marker = L.circleMarker([p.lat, p.lng], {
+          radius: 9, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.9
+        }).addTo(map);
+        marker.bindPopup(`
+          <div style="font-family:sans-serif;min-width:150px">
+            <div style="font-weight:800;font-size:14px;margin-bottom:2px">${esc(p.title || '')}</div>
+            <div style="color:${color};font-weight:700;font-size:11px">${esc(p.sub || '')}</div>
+            ${p.loc ? `<div style="color:#9ca3af;font-size:11px;margin-top:3px">📍 ${esc(p.loc)}</div>` : ''}
+            ${navBtn(p.lat, p.lng, p.loc)}
+          </div>`);
+        mapMarkers.push(marker);
+        bounds.push([p.lat, p.lng]);
+      });
+      if (bounds.length) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+      icons();
+      backfillCoords();
+      backfillLodging();
+    }
+
+    // 尚未有座標、但有地點的舊資料：慢速補定位（1/秒）並寫回 Firebase
+    let backfilling = false;
+    async function backfillCoords() {
+      if (backfilling || !activeTripId) return;
+      const pendingExp = expenses.filter(e => e.location && (e.lat == null || e.lng == null));
+      const pendingItin = itinerary.filter(e => e.location && (e.lat == null || e.lng == null));
+      if (!pendingExp.length && !pendingItin.length) return;
+      backfilling = true;
+      try {
+        for (const exp of pendingExp) {
+          const geo = await geocode(exp.location);
+          await new Promise(r => setTimeout(r, 1100));
+          const patch = geo ? { lat: geo.lat, lng: geo.lng } : { lat: 0, lng: 0 };
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', `expenses_${activeTripId}`, exp.dbId), patch);
+        }
+        for (const it of pendingItin) {
+          const geo = await geocode(it.location);
+          await new Promise(r => setTimeout(r, 1100));
+          const patch = geo ? { lat: geo.lat, lng: geo.lng } : { lat: 0, lng: 0 };
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', `itinerary_${activeTripId}`, it.dbId), patch);
+        }
+      } catch (err) { console.warn('補定位中斷', err); }
+      finally { backfilling = false; }
+    }
 
     // ===== 成員 =====
     function renderPeople() {
@@ -406,6 +1002,7 @@
       input.value = '';
       switchTrip(d.id);
       window.closeModal('tripModal');
+      setTimeout(() => window.openTripSettings(), 400);
     };
 
     // ===== 匯率 =====
@@ -698,10 +1295,21 @@
       const btn = $('saveBtn'); const loader = $('saveLoader');
       btn.disabled = true; loader.classList.add('active');
       try {
+        const locationText = $('expLocation').value.trim();
+        // 地點→經緯度（Nominatim，免金鑰）。若地點未變且已有座標則汿用。
+        let geo = null;
+        const prev = editingId ? expensesCache[editingId] : null;
+        if (locationText) {
+          if (prev && prev.location === locationText && prev.lat != null) {
+            geo = { lat: prev.lat, lng: prev.lng };
+          } else {
+            geo = await geocode(locationText);
+          }
+        }
         const col = collection(db, 'artifacts', appId, 'public', 'data', `expenses_${activeTripId}`);
         const data = {
           note, amount,
-          location: $('expLocation').value.trim(),
+          location: locationText,
           remarks: $('expRemarks').value.trim(),
           currency: $('expCurrency').value,
           category: $('expCategory').value,
@@ -712,6 +1320,8 @@
           participants: [...participants],
           customAmounts: { ...customAmounts },
           previewUrl: previewUrl || null,
+          lat: geo ? geo.lat : null,
+          lng: geo ? geo.lng : null,
           created_at: editingId && expensesCache[editingId] ? (expensesCache[editingId].created_at || Date.now()) : Date.now(),
           updated_at: serverTimestamp()
         };
@@ -769,6 +1379,410 @@
         window.updateEstimate();
       } catch (err) { console.error('AI 辨識失敗', err); }
       finally { $('aiLoader').classList.add('hidden'); }
+    }
+
+    // ===== 日期工具 =====
+    const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+    const dObj = (s) => new Date(s + 'T00:00:00');
+    const daysBetween = (a, b) => Math.round((dObj(b) - dObj(a)) / 86400000);
+    const mdw = (s) => { const d = dObj(s); return `${d.getMonth()+1}/${d.getDate()} (${WD[d.getDay()]})`; };
+
+    // ===== 首頁目次 =====
+    function renderHome() {
+      const trip = trips.find(t => t.id === activeTripId);
+      $('homeDest').innerText = tripMeta.destination || (trip ? trip.name : '—');
+      const s = tripMeta.startDate, e = tripMeta.endDate;
+      $('homeDates').innerText = (s || e) ? `${s ? mdw(s) : '?'} — ${e ? mdw(e) : '?'}` : '尚未設定日期（點右上齒輪）';
+
+      // 出發倒數 / 進行中 / 已結束
+      const cd = $('homeCountdown');
+      if (s) {
+        const t = todayStr();
+        const toStart = daysBetween(t, s);
+        let inner;
+        if (toStart > 0) {
+          inner = `<div class="flex items-baseline gap-2"><span class="text-xs text-blue-300 font-black uppercase tracking-widest">出發倒數</span></div><div class="flex items-baseline gap-2"><span class="text-5xl font-black text-[#3B82F6]">${toStart}</span><span class="text-lg font-black text-gray-400">天</span></div>`;
+        } else {
+          const total = e ? daysBetween(s, e) + 1 : null;
+          const dayN = daysBetween(s, t) + 1;
+          if (e && daysBetween(t, e) < 0) inner = `<div class="text-2xl font-black text-gray-400">旅程已結束 ✈</div>`;
+          else inner = `<div class="flex items-baseline gap-2"><span class="text-xs text-emerald-400 font-black uppercase tracking-widest">旅程進行中</span></div><div class="flex items-baseline gap-2"><span class="text-5xl font-black text-emerald-500">第 ${dayN}</span><span class="text-lg font-black text-gray-400">天${total ? ' / 共 ' + total + ' 天' : ''}</span></div>`;
+        }
+        cd.innerHTML = `<div class="bg-blue-50/50 rounded-2xl p-4">${inner}</div>`;
+      } else cd.innerHTML = '';
+
+      // 目次磚
+      const mapPts = collectMapPoints().length;
+      const listDone = lists.filter(l => l.done).length;
+      const tiles = [
+        { p: 'trip',   icon: 'wallet',       label: '記帳',   sub: `${expenses.length} 筆`,   bg: '#eff6ff', fg: '#3b82f6' },
+        { p: 'flight', icon: 'plane',        label: '航班',   sub: `${flights.length} 段`,    bg: '#eef2ff', fg: '#6366f1' },
+        { p: 'itin',   icon: 'calendar-days',label: '行程',   sub: `${itinerary.length} 項`,  bg: '#f0fdf4', fg: '#10b981' },
+        { p: 'map',    icon: 'map',          label: '地圖',   sub: `${mapPts} 地點`,          bg: '#fff7ed', fg: '#f59e0b' },
+        { p: 'list',   icon: 'check-square', label: '清單',   sub: `${listDone}/${lists.length} 完成`, bg: '#fdf2f8', fg: '#ec4899' },
+        { p: 'rate',   icon: 'arrow-right-left', label: '匯率', sub: liveRates ? '即時' : '換算', bg: '#ecfeff', fg: '#0ea5e9' }
+      ];
+      $('homeTiles').innerHTML = tiles.map(t => `
+        <button onclick="window.setPage('${t.p}')" class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-5 text-left hover:shadow-md hover:-translate-y-0.5 transition-all">
+          <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style="background:${t.bg};color:${t.fg}"><i data-lucide="${t.icon}" class="w-5 h-5"></i></div>
+          <div class="font-black text-gray-700">${t.label}</div>
+          <div class="text-xs text-gray-400 font-bold mt-0.5">${t.sub}</div>
+        </button>`).join('');
+      icons();
+    }
+
+    // ===== 天氣（Open-Meteo，免金鑰）=====
+    function wmo(code) {
+      if (code === 0) return { icon: 'sun', label: '晴' };
+      if (code <= 2) return { icon: 'cloud-sun', label: '多雲時晴' };
+      if (code === 3) return { icon: 'cloud', label: '陰' };
+      if (code <= 48) return { icon: 'cloud-fog', label: '霧' };
+      if (code <= 57) return { icon: 'cloud-drizzle', label: '毛毛雨' };
+      if (code <= 67) return { icon: 'cloud-rain', label: '雨' };
+      if (code <= 77) return { icon: 'snowflake', label: '雪' };
+      if (code <= 82) return { icon: 'cloud-rain', label: '陣雨' };
+      if (code <= 86) return { icon: 'snowflake', label: '陣雪' };
+      return { icon: 'cloud-lightning', label: '雷雨' };
+    }
+    async function fetchWeather() {
+      const box = $('homeWeather');
+      let lat = tripMeta.destLat, lng = tripMeta.destLng;
+      if ((lat == null || lng == null) && tripMeta.destination) {
+        const g = await geocode(tripMeta.destination);
+        if (g) { lat = g.lat; lng = g.lng; }
+      }
+      if (lat == null || lng == null) { box.innerHTML = ''; return; }
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=5`;
+        const r = await fetch(url);
+        const d = await r.json();
+        const cur = wmo(d.current.weather_code);
+        const days = d.daily.time.map((t, i) => {
+          const w = wmo(d.daily.weather_code[i]);
+          return `<div class="flex flex-col items-center gap-1 flex-1"><span class="text-[10px] text-gray-400 font-bold">${mdw(t).split(' ')[0]}</span><i data-lucide="${w.icon}" class="w-4 h-4 text-blue-400"></i><span class="text-[10px] font-black text-gray-600">${Math.round(d.daily.temperature_2m_max[i])}°</span><span class="text-[9px] text-gray-300 font-bold">${Math.round(d.daily.temperature_2m_min[i])}°</span></div>`;
+        }).join('');
+        box.innerHTML = `<div class="bg-gray-50 rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2"><i data-lucide="${cur.icon}" class="w-7 h-7 text-blue-400"></i><div><div class="text-2xl font-black text-gray-700">${Math.round(d.current.temperature_2m)}°</div><div class="text-[10px] text-gray-400 font-bold">${cur.label} · ${esc(tripMeta.destination||'')}</div></div></div>
+          </div>
+          <div class="flex gap-1">${days}</div>
+        </div>`;
+        icons();
+      } catch (err) { console.warn('天氣載入失敗', err); box.innerHTML = ''; }
+    }
+
+    // ===== 行程（時間軸 + 住宿色帶 + 高亮今天）=====
+    function lodgingForDate(dateStr) {
+      const lodgings = tripMeta.lodgings || [];
+      for (const l of lodgings) {
+        if (!l.checkin || !l.nights) continue;
+        const diff = daysBetween(l.checkin, dateStr);
+        if (diff >= 0 && diff < l.nights) return { ...l, night: diff + 1 };
+      }
+      return null;
+    }
+    function renderItinerary() {
+      // 倒數列
+      const s = tripMeta.startDate;
+      const cd = $('itinCountdown');
+      if (s) {
+        const toStart = daysBetween(todayStr(), s);
+        cd.innerHTML = `<div class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-4 flex items-center justify-between">
+          <div class="flex items-center gap-2 text-gray-500"><i data-lucide="calendar-days" class="w-4 h-4"></i><span class="font-black">行程總覽</span></div>
+          <span class="text-sm font-black ${toStart > 0 ? 'text-[#3B82F6]' : 'text-emerald-500'}">${toStart > 0 ? '出發倒數 ' + toStart + ' 天' : '旅程進行中'}</span>
+        </div>`;
+      } else cd.innerHTML = '';
+
+      // 建立日期清單：起訖日 ∪ 有項目的日期
+      const set = new Set(itinerary.map(i => i.date).filter(Boolean));
+      if (tripMeta.startDate && tripMeta.endDate) {
+        const n = daysBetween(tripMeta.startDate, tripMeta.endDate);
+        for (let i = 0; i <= n; i++) { const dt = new Date(dObj(tripMeta.startDate).getTime() + i*86400000); set.add(`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`); }
+      }
+      const dates = [...set].sort();
+      const t = todayStr();
+
+      if (!dates.length) {
+        $('itineraryList').innerHTML = `<div class="text-center py-20 text-gray-300 font-bold bg-white rounded-2xl border border-gray-50"><i data-lucide="calendar-days" class="w-10 h-10 mx-auto mb-2 opacity-20"></i><p>尚無行程，點右上「新增行程」<br/>或到旅程設定填入日期</p></div>`;
+        icons(); return;
+      }
+
+      $('itineraryList').innerHTML = dates.map(date => {
+        const items = itinerary.filter(i => i.date === date);
+        const isToday = date === t;
+        const dayN = tripMeta.startDate ? daysBetween(tripMeta.startDate, date) + 1 : null;
+        const lodge = lodgingForDate(date);
+        return `<div class="bg-white rounded-2xl shadow-sm border ${isToday ? 'border-blue-400 ring-2 ring-blue-100' : 'border-[#E5E7EB]'} overflow-hidden">
+          <div class="flex items-center justify-between px-5 py-3 ${isToday ? 'bg-blue-50' : 'bg-gray-50'}">
+            <div class="flex items-center gap-2">
+              ${dayN ? `<span class="text-xs font-black ${isToday ? 'text-blue-500' : 'text-gray-400'}">DAY ${dayN}</span>` : ''}
+              <span class="font-black text-gray-700">${mdw(date)}</span>
+              ${isToday ? '<span class="bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black">今天</span>' : ''}
+            </div>
+          </div>
+          ${lodge ? `<div class="flex items-center gap-2 px-5 py-2 text-xs font-black text-white" style="background:${lodge.color || '#8b5cf6'}"><i data-lucide="bed-double" class="w-3.5 h-3.5"></i>${esc(lodge.name)} · 第 ${lodge.night} 晚</div>` : ''}
+          <div class="p-4 space-y-1">
+            ${items.length ? items.map(it => {
+              const ty = ITIN_TYPES[it.type] || ITIN_TYPES['其他'];
+              return `<div onclick="window.editItin('${it.dbId}')" class="flex gap-3 p-2 rounded-xl hover:bg-gray-50 cursor-pointer group">
+                <div class="flex flex-col items-center pt-0.5 w-12 shrink-0">
+                  <span class="text-xs font-black text-gray-600">${esc(it.time || '—')}</span>
+                </div>
+                <div class="flex flex-col items-center shrink-0">
+                  <div class="w-3 h-3 rounded-full mt-1" style="background:${ty.color}"></div>
+                  <div class="flex-1 w-0.5 bg-gray-100 my-1"></div>
+                </div>
+                <div class="flex-1 min-w-0 pb-2">
+                  <div class="flex items-center gap-1.5"><i data-lucide="${ty.icon}" class="w-3.5 h-3.5" style="color:${ty.color}"></i><span class="font-black text-gray-700 truncate">${esc(it.title)}</span></div>
+                  ${it.location ? `<div class="text-[11px] text-gray-400 font-bold mt-0.5 flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3"></i>${esc(it.location)}</div>` : ''}
+                  ${it.note ? `<div class="text-[11px] text-gray-400 font-bold mt-0.5 italic">${esc(it.note)}</div>` : ''}
+                </div>
+              </div>`;
+            }).join('') : `<div class="text-center py-4 text-gray-300 text-xs font-bold">這天還沒安排</div>`}
+          </div>
+        </div>`;
+      }).join('');
+      icons();
+    }
+
+    function buildItinTypeSelect() {
+      $('itType').innerHTML = Object.keys(ITIN_TYPES).map(k => `<option value="${k}">${k}</option>`).join('');
+    }
+    window.openAddItin = () => {
+      if (!activeTripId) { alert('請先選擇帳本'); return; }
+      editingItinId = null;
+      $('itinModalTitle').innerText = '新增行程';
+      $('itinDeleteBtn').setAttribute('x-hidden', '');
+      buildItinTypeSelect();
+      $('itTitle').value = '';
+      $('itDate').value = tripMeta.startDate && daysBetween(todayStr(), tripMeta.startDate) > 0 ? tripMeta.startDate : todayStr();
+      $('itTime').value = '';
+      $('itType').value = '景點';
+      $('itLocation').value = '';
+      $('itNote').value = '';
+      window.openModal('addItinModal');
+    };
+    window.editItin = (id) => {
+      const it = itineraryCache[id]; if (!it) return;
+      editingItinId = id;
+      $('itinModalTitle').innerText = '編輯行程';
+      $('itinDeleteBtn').removeAttribute('x-hidden');
+      buildItinTypeSelect();
+      $('itTitle').value = it.title || '';
+      $('itDate').value = it.date || todayStr();
+      $('itTime').value = it.time || '';
+      $('itType').value = it.type || '景點';
+      $('itLocation').value = it.location || '';
+      $('itNote').value = it.note || '';
+      window.openModal('addItinModal');
+    };
+    window.saveItin = async () => {
+      if (!isAuthed || !activeTripId) return;
+      const title = $('itTitle').value.trim();
+      if (!title) { alert('請填寫行程名稱'); return; }
+      const btn = $('itinSaveBtn'), loader = $('itinSaveLoader');
+      btn.disabled = true; loader.classList.add('active');
+      try {
+        const locationText = $('itLocation').value.trim();
+        let geo = null;
+        const prev = editingItinId ? itineraryCache[editingItinId] : null;
+        if (locationText) {
+          if (prev && prev.location === locationText && prev.lat != null) geo = { lat: prev.lat, lng: prev.lng };
+          else geo = await geocode(locationText);
+        }
+        const col = collection(db, 'artifacts', appId, 'public', 'data', `itinerary_${activeTripId}`);
+        const data = {
+          title, date: $('itDate').value, time: $('itTime').value,
+          type: $('itType').value, location: locationText, note: $('itNote').value.trim(),
+          lat: geo ? geo.lat : null, lng: geo ? geo.lng : null,
+          updated_at: serverTimestamp()
+        };
+        if (editingItinId) await updateDoc(doc(col, editingItinId), data);
+        else await addDoc(col, data);
+        window.closeModal('addItinModal');
+      } catch (err) { console.error('行程儲存失敗', err); alert('儲存失敗，請確認網路與權限'); }
+      finally { btn.disabled = false; loader.classList.remove('active'); }
+    };
+    window.deleteItin = async () => {
+      if (!editingItinId || !isAuthed) return;
+      if (!confirm('確定刪除此行程？')) return;
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', `itinerary_${activeTripId}`, editingItinId));
+      window.closeModal('addItinModal');
+    };
+
+    // ===== 清單（願望 / 必買）=====
+    window.setListType = (t) => {
+      listType = t;
+      const on = 'listtab flex-1 px-4 py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-1.5 transition-all bg-white text-blue-500 shadow-sm border border-blue-100';
+      const off = 'listtab flex-1 px-4 py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-1.5 transition-all bg-transparent text-gray-400 hover:bg-white';
+      $('listTabWish').className = t === 'wish' ? on : off;
+      $('listTabBuy').className = t === 'buy' ? on : off;
+      renderLists();
+    };
+    function renderLists() {
+      $('newListMember').innerHTML = `<option value="">未指定</option>` + people.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+      const items = lists.filter(l => (l.listType || 'wish') === listType);
+      const done = items.filter(i => i.done).length;
+      $('listProgress').innerHTML = items.length ? `<div class="flex items-center gap-3"><div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-blue-400 rounded-full transition-all" style="width:${Math.round(done/items.length*100)}%"></div></div><span class="text-xs text-gray-400 font-black">${done}/${items.length}</span></div>` : '';
+      $('listItems').innerHTML = items.length ? items.map(it => `
+        <div class="flex items-center gap-3 bg-white rounded-xl border border-[#E5E7EB] px-4 py-3 group">
+          <button onclick="window.toggleListItem('${it.dbId}')" title="完成" class="shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${it.done ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-200 text-transparent hover:border-blue-300'}"><i data-lucide="check" class="w-4 h-4"></i></button>
+          <div class="flex-1 min-w-0">
+            <div class="font-bold ${it.done ? 'text-gray-300 line-through' : 'text-gray-700'} truncate">${esc(it.text)}</div>
+          </div>
+          ${it.member ? `<span class="bg-gray-100 text-gray-500 text-[10px] px-2 py-0.5 rounded-full font-black shrink-0">${esc(it.member)}</span>` : ''}
+          <button onclick="window.deleteListItem('${it.dbId}')" title="刪除" class="text-red-300 hover:text-red-500 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity shrink-0"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+        </div>`).join('') : `<div class="text-center py-16 text-gray-300 font-bold"><i data-lucide="${listType === 'wish' ? 'sparkles' : 'shopping-bag'}" class="w-10 h-10 mx-auto mb-2 opacity-20"></i><p>${listType === 'wish' ? '還沒有願望，加一個吧' : '還沒有必買，加一個吧'}</p></div>`;
+      icons();
+    }
+    window.addListItem = async () => {
+      if (!isAuthed || !activeTripId) return;
+      const input = $('newListInput');
+      const text = input.value.trim();
+      if (!text) return;
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', `lists_${activeTripId}`), {
+        text, listType, member: $('newListMember').value || '', done: false, created_at: Date.now()
+      });
+      input.value = '';
+    };
+    window.toggleListItem = async (id) => {
+      const it = listsCache[id]; if (!it) return;
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', `lists_${activeTripId}`, id), { done: !it.done });
+    };
+    window.deleteListItem = async (id) => {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', `lists_${activeTripId}`, id));
+    };
+
+    // ===== 即時匯率 =====
+    async function loadLiveRates(force) {
+      if (liveRates && !force) return liveRates;
+      try {
+        const r = await fetch('https://open.er-api.com/v6/latest/USD');
+        const d = await r.json();
+        if (d.result === 'success') {
+          liveRates = { rates: d.rates, time: d.time_last_update_utc };
+          $('rateUpdated') && ($('rateUpdated').innerText = `即時匯率・更新於 ${new Date(d.time_last_update_unix*1000).toLocaleString('zh-TW')}`);
+        }
+      } catch (err) { console.warn('匯率載入失敗', err); $('rateUpdated') && ($('rateUpdated').innerText = '匯率載入失敗，請稍後再試'); }
+      return liveRates;
+    }
+    function liveRate(from, to) {
+      if (!liveRates) return null;
+      const rf = liveRates.rates[from], rt = liveRates.rates[to];
+      if (!rf || !rt) return null;
+      return rt / rf;
+    }
+    window.loadLiveRates = async (force) => { await loadLiveRates(force); window.convert('from'); renderRateQuick(); };
+    async function renderRatesPage() {
+      const codes = CURRENCIES.map(c => c.code);
+      $('convFrom').innerHTML = codes.map(c => `<option value="${c}">${c}</option>`).join('');
+      $('convTo').innerHTML = codes.map(c => `<option value="${c}">${c}</option>`).join('');
+      $('convFrom').value = tripMeta.foreignCurrency || 'JPY';
+      $('convTo').value = 'TWD';
+      await loadLiveRates(false);
+      renderRateQuick();
+      window.convert('from');
+    }
+    function renderRateQuick() {
+      $('rateQuickTable').innerHTML = CURRENCIES.filter(c => c.code !== 'TWD').map(c => {
+        const r = liveRate(c.code, 'TWD');
+        return `<div class="flex justify-between items-center text-sm"><span class="text-gray-500 font-bold">1 ${c.code} (${c.symbol})</span><span class="font-black text-gray-700">${r ? r.toFixed(3) : '—'} <span class="text-xs text-gray-400">TWD</span></span></div>`;
+      }).join('');
+    }
+    window.convert = (dir) => {
+      const from = $('convFrom').value, to = $('convTo').value;
+      const r = liveRate(from, to);
+      if (r == null) return;
+      if (dir === 'from') {
+        const v = parseFloat($('convFromAmt').value) || 0;
+        $('convToAmt').value = (v * r).toFixed(2);
+      } else {
+        const v = parseFloat($('convToAmt').value) || 0;
+        $('convFromAmt').value = (v / r).toFixed(2);
+      }
+    };
+    window.applyLiveRatesToTrip = async () => {
+      if (!liveRates) { alert('尚未取得即時匯率'); return; }
+      const newRates = { TWD: 1 };
+      CURRENCIES.filter(c => c.code !== 'TWD').forEach(c => { const r = liveRate(c.code, 'TWD'); if (r) newRates[c.code] = Math.round(r * 1000) / 1000; });
+      rates = { ...rates, ...newRates };
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'trip_settings', activeTripId), { rates: newRates }, { merge: true });
+      alert('已套用即時匯率到此帳本的記帳換算');
+    };
+
+    // ===== 旅程設定 =====
+    window.openTripSettings = () => {
+      if (!activeTripId) return;
+      fillCurrencySelect($('metaCurrency'), tripMeta.foreignCurrency || 'JPY');
+      $('metaDest').value = tripMeta.destination || '';
+      $('metaStart').value = tripMeta.startDate || '';
+      $('metaEnd').value = tripMeta.endDate || '';
+      lodgingDraft = (tripMeta.lodgings || []).map(l => ({ ...l }));
+      renderLodgingDraft();
+      window.openModal('tripSettingsModal');
+    };
+    window.addLodgingRow = () => { lodgingDraft.push({ name: '', checkin: tripMeta.startDate || todayStr(), nights: 1, color: LODGE_COLORS[lodgingDraft.length % LODGE_COLORS.length] }); renderLodgingDraft(); };
+    window.removeLodgingRow = (i) => { lodgingDraft.splice(i, 1); renderLodgingDraft(); };
+    window.setLodgingField = (i, f, v) => { lodgingDraft[i][f] = f === 'nights' ? (parseInt(v) || 1) : v; };
+    function renderLodgingDraft() {
+      $('lodgingEditList').innerHTML = lodgingDraft.map((l, i) => `
+        <div class="border border-gray-100 rounded-xl p-3 space-y-2" style="border-left:4px solid ${l.color || '#8b5cf6'}">
+          <div class="flex gap-2">
+            <input value="${esc(l.name || '')}" oninput="window.setLodgingField(${i},'name',this.value)" placeholder="飯店名稱/地點" class="flex-1 border-b border-gray-100 py-1 text-sm font-bold outline-none focus:border-blue-400 bg-transparent" />
+            <button onclick="window.removeLodgingRow(${i})" title="移除" class="text-red-300 hover:text-red-500"><i data-lucide="x" class="w-4 h-4"></i></button>
+          </div>
+          <div class="flex gap-2 items-center">
+            <input type="date" value="${l.checkin || ''}" onchange="window.setLodgingField(${i},'checkin',this.value)" class="border border-gray-100 rounded-lg px-2 py-1 text-xs font-bold outline-none" />
+            <span class="text-xs text-gray-400 font-bold">住</span>
+            <input type="number" min="1" value="${l.nights || 1}" onchange="window.setLodgingField(${i},'nights',this.value)" class="w-14 border border-gray-100 rounded-lg px-2 py-1 text-xs font-black outline-none text-center" />
+            <span class="text-xs text-gray-400 font-bold">晚</span>
+          </div>
+        </div>`).join('');
+      icons();
+    }
+    window.saveTripMeta = async () => {
+      if (!activeTripId) return;
+      const loader = $('metaSaveLoader'); loader.classList.add('active');
+      try {
+        const dest = $('metaDest').value.trim();
+        let destLat = tripMeta.destLat, destLng = tripMeta.destLng;
+        if (dest && dest !== tripMeta.destination) {
+          const g = await geocode(dest);
+          if (g) { destLat = g.lat; destLng = g.lng; } else { destLat = null; destLng = null; }
+        }
+        // 住宿地點定位
+        for (const l of lodgingDraft) {
+          if (l.name && (l.lat == null || l._geoName !== l.name)) {
+            const g = await geocode(l.name);
+            await new Promise(r => setTimeout(r, 400));
+            if (g) { l.lat = g.lat; l.lng = g.lng; l._geoName = l.name; }
+          }
+        }
+        const meta = {
+          destination: dest, destLat: destLat ?? null, destLng: destLng ?? null,
+          startDate: $('metaStart').value, endDate: $('metaEnd').value,
+          foreignCurrency: $('metaCurrency').value,
+          lodgings: lodgingDraft.filter(l => l.name)
+        };
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'trip_settings', activeTripId), { meta }, { merge: true });
+        window.closeModal('tripSettingsModal');
+      } catch (err) { console.error('旅程設定儲存失敗', err); alert('儲存失敗'); }
+      finally { loader.classList.remove('active'); }
+    };
+
+    // 住宿座標補定位（開地圖時）
+    let lodgeBackfilling = false;
+    async function backfillLodging() {
+      if (lodgeBackfilling || !activeTripId) return;
+      const lodgings = tripMeta.lodgings || [];
+      const pending = lodgings.filter(l => l.name && (l.lat == null || l.lng == null));
+      if (!pending.length) return;
+      lodgeBackfilling = true;
+      try {
+        for (const l of pending) { const g = await geocode(l.name); await new Promise(r => setTimeout(r, 1100)); if (g) { l.lat = g.lat; l.lng = g.lng; } else { l.lat = 0; l.lng = 0; } }
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'trip_settings', activeTripId), { meta: { ...tripMeta, lodgings } }, { merge: true });
+      } catch (err) { console.warn('住宿補定位中斷', err); }
+      finally { lodgeBackfilling = false; }
     }
 
     // ===== Modal helpers =====
