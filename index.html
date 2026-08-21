@@ -4,30 +4,70 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>旅遊分帳</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['"Zen Maru Gothic"', '"Noto Sans TC"', 'system-ui', 'sans-serif'] },
+          colors: {
+            // 主色：莫蘭迪抹茶／苔綠（取代原本的藍）
+            blue:    { 50:'#F0F2EC', 100:'#E1E6D8', 200:'#C9D2BB', 300:'#ABB899', 400:'#8E9E78', 500:'#77875F', 600:'#616F4D', 700:'#4C583D', 800:'#3A4430', 900:'#2C3325' },
+            // 中性：暖米灰／大地色
+            gray:    { 50:'#FAF7F1', 100:'#F3EEE5', 200:'#E7DFD2', 300:'#D8CDBB', 400:'#B9AC98', 500:'#94897A', 600:'#736A5D', 700:'#565044', 800:'#3E3930', 900:'#2C2823' },
+            // 磚紅（刪除等）
+            red:     { 50:'#F6EDE9', 100:'#EBD9D0', 200:'#DCBDAE', 300:'#C99C87', 400:'#C08267', 500:'#B06B50', 600:'#965740', 700:'#784634' },
+            // 柔綠（成功／進行中）
+            green:   { 50:'#EDF1EA', 100:'#DBE4D3', 200:'#BFCEB0', 300:'#9DB388', 400:'#85A06E', 500:'#6E8B58', 600:'#587046', 700:'#465837' },
+            emerald: { 50:'#EDF1EA', 100:'#DBE4D3', 200:'#BFCEB0', 300:'#9DB388', 400:'#85A06E', 500:'#6E8B58', 600:'#587046', 700:'#465837' },
+            // 霧藍（消費／行程時間）
+            sky:     { 50:'#EBF0F2', 100:'#D6E1E7', 200:'#B4C8D1', 300:'#8FACB8', 400:'#7695A4', 500:'#5E7F90', 600:'#4C6777', 700:'#3D525E' },
+            orange:  { 50:'#F6F1E8', 100:'#EBE1CC', 200:'#DBC8A2', 300:'#CBAE78', 400:'#C0975A', 500:'#A9843F', 600:'#8C6C34' },
+            amber:   { 50:'#F6F1E8', 100:'#EBE1CC', 200:'#DBC8A2', 300:'#CBAE78', 400:'#C0975A', 500:'#A9843F', 600:'#8C6C34' },
+            pink:    { 50:'#F4ECEF', 100:'#E8D8DF', 200:'#D6BAC6', 300:'#C398AA', 400:'#B78096', 500:'#A66980', 600:'#8B5568' }
+          },
+          borderRadius: { lg:'0.75rem', xl:'1.1rem', '2xl':'1.5rem', '3xl':'2rem' },
+          boxShadow: {
+            sm: '0 1px 2px 0 rgba(87,80,68,0.05)',
+            DEFAULT: '0 1px 3px 0 rgba(87,80,68,0.07)',
+            md: '0 6px 16px -4px rgba(87,80,68,0.10)',
+            lg: '0 12px 28px -6px rgba(87,80,68,0.12)',
+            xl: '0 20px 40px -10px rgba(87,80,68,0.14)',
+            '2xl': '0 28px 56px -14px rgba(87,80,68,0.18)'
+          }
+        }
+      }
+    };
+  </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    body { -webkit-tap-highlight-color: transparent; }
-    .modal { display: none; align-items: center; justify-content: center; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 50; backdrop-filter: blur(4px); padding: 1rem; }
+    body { -webkit-tap-highlight-color: transparent; font-family: "Zen Maru Gothic", "Noto Sans TC", system-ui, sans-serif; -webkit-font-smoothing: antialiased; letter-spacing: .01em; }
+    input, select, textarea, button { font-family: inherit; }
+    h1, h2, h3 { text-wrap: pretty; }
+    .modal { display: none; align-items: center; justify-content: center; position: fixed; inset: 0; background: rgba(56,50,42,0.34); z-index: 50; backdrop-filter: blur(5px); padding: 1rem; }
     .modal.active { display: flex; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb { background: #E0D6C6; border-radius: 10px; }
     .loading-overlay { display: none; }
-    .loading-overlay.active { display: flex; position: absolute; inset: 0; background: rgba(255,255,255,0.7); align-items: center; justify-content: center; z-index: 20; border-radius: 0.75rem; }
+    .loading-overlay.active { display: flex; position: absolute; inset: 0; background: rgba(250,247,241,0.78); align-items: center; justify-content: center; z-index: 20; border-radius: 1.1rem; }
     [x-hidden] { display: none !important; }
     .pagetab, #currentTripName, .listtab { white-space: nowrap; }
-    a { color: #3B82F6; }
-    a:hover { color: #2563eb; }
+    a { color: #77875F; }
+    a:hover { color: #616F4D; }
+    .leaflet-popup-content-wrapper { border-radius: 14px; }
   </style>
 </head>
-<body class="bg-[#F9FAFB] text-[#4B5563] font-bold min-h-screen">
+<body class="bg-[#F5F1E8] text-[#565044] font-bold min-h-screen">
 
   <div id="mainApp" class="max-w-[480px] mx-auto px-4 pt-2 pb-28" x-hidden>
     <!-- Header (sticky) -->
-    <div class="sticky top-0 z-30 -mx-4 px-4 py-2.5 bg-[#F9FAFB]/90 backdrop-blur mb-4 flex justify-center">
-      <button onclick="window.openModal('tripModal')" title="更換帳本" class="flex items-center gap-2 text-[#3B82F6] hover:bg-blue-50 px-4 py-2 rounded-full border border-blue-100 transition-all bg-white shadow-sm">
+    <div class="sticky top-0 z-30 -mx-4 px-4 py-2.5 bg-[#F5F1E8]/90 backdrop-blur mb-4 flex justify-center">
+      <button onclick="window.openModal('tripModal')" title="更換帳本" class="flex items-center gap-2 text-[#77875F] hover:bg-blue-50 px-4 py-2 rounded-full border border-blue-100 transition-all bg-white shadow-sm">
         <i data-lucide="folder-open" class="w-4 h-4"></i>
         <span id="currentTripName" class="text-sm leading-none">載入中...</span>
         <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-blue-300"></i>
@@ -36,7 +76,7 @@
 
     <!-- 首頁目次 -->
     <div id="pageHome" x-hidden>
-      <div class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 mb-5 overflow-hidden relative">
+      <div class="bg-white rounded-2xl shadow-sm border border-[#E7DFD2] p-6 mb-5 overflow-hidden relative">
         <div class="flex justify-between items-start gap-4">
           <div class="min-w-0">
             <div class="text-[10px] text-blue-400 uppercase tracking-widest font-black mb-1">TRIP</div>
@@ -47,6 +87,7 @@
         </div>
         <div id="homeCountdown" class="mt-5"></div>
         <div id="homeWeather" class="mt-5"></div>
+        <div id="homeCalendar" class="mt-5"></div>
       </div>
       <div id="homeLodging" class="mb-5"></div>
       <div id="homeTiles" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
@@ -55,7 +96,7 @@
     <div id="tripContent" x-hidden class="grid grid-cols-1 gap-5">
       <div class="space-y-6">
         <!-- 成員 -->
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-[#E5E7EB]">
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-[#E7DFD2]">
           <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-2 text-gray-500"><i data-lucide="users" class="w-4 h-4"></i><h2>成員名單</h2></div>
             <button onclick="window.openModal('ratesModal')" class="text-blue-500 hover:text-blue-600 flex items-center gap-1 text-xs">
@@ -64,33 +105,15 @@
           </div>
           <div id="peopleList" class="flex flex-wrap gap-2 mb-4"></div>
           <div class="flex gap-2">
-            <input id="newPersonInput" type="text" placeholder="新成員名稱" onkeydown="if(event.key==='Enter')window.addPerson()" class="flex-1 border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-gray-50 font-bold" />
-            <button onclick="window.addPerson()" title="新增成員" class="bg-white border border-[#E5E7EB] px-3 rounded-lg hover:bg-gray-50 text-gray-400"><i data-lucide="plus" class="w-4 h-4"></i></button>
+            <input id="newPersonInput" type="text" placeholder="新成員名稱" onkeydown="if(event.key==='Enter')window.addPerson()" class="flex-1 border border-[#E7DFD2] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-gray-50 font-bold" />
+            <button onclick="window.addPerson()" title="新增成員" class="bg-white border border-[#E7DFD2] px-3 rounded-lg hover:bg-gray-50 text-gray-400"><i data-lucide="plus" class="w-4 h-4"></i></button>
           </div>
-        </div>
-
-        <!-- 結算轉帳 -->
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-[#E5E7EB]">
-          <div class="flex justify-between items-center mb-4">
-            <div class="flex items-center gap-2 text-gray-500"><i data-lucide="credit-card" class="w-4 h-4"></i><h2>結算轉帳</h2></div>
-            <select id="settlementCurrency" onchange="window.refreshUI()" title="結算幣別" class="bg-gray-50 border border-gray-100 text-xs px-2 py-1 rounded-md font-bold outline-none cursor-pointer"></select>
-          </div>
-          <div id="transfersList" class="space-y-2"></div>
-        </div>
-
-        <!-- 總額彙整 -->
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-[#E5E7EB]">
-          <div class="flex justify-between items-center mb-4">
-            <div class="flex items-center gap-2 text-gray-500"><i data-lucide="file-text" class="w-4 h-4"></i><h2>總額彙整</h2></div>
-            <select id="summaryCurrency" onchange="window.refreshUI()" title="彙整幣別" class="bg-gray-50 border border-gray-100 text-xs px-2 py-1 rounded-md font-bold outline-none cursor-pointer"></select>
-          </div>
-          <div id="summaryList" class="space-y-4"></div>
         </div>
       </div>
 
       <!-- 支出明細 -->
       <div class="space-y-6">
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-[#E5E7EB]">
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-[#E7DFD2]">
           <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-2 text-gray-500"><i data-lucide="receipt" class="w-4 h-4"></i><h2>支出明細</h2></div>
             <div class="flex items-center gap-2">
@@ -121,15 +144,22 @@
       <div id="itineraryList" class="space-y-6"></div>
     </div>
 
-    <!-- 地圖頁面 -->
-    <div id="pageMap" x-hidden>
-      <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-2 text-gray-500"><i data-lucide="map" class="w-4 h-4"></i><h2 class="font-black">地圖</h2></div>
-        <select id="mapDateFilter" onchange="window.setMapDate(this.value)" title="日期篩選" class="bg-white border border-gray-100 shadow-sm text-xs px-3 py-2 rounded-lg font-bold outline-none cursor-pointer"></select>
+    <!-- 結算頁面 -->
+    <div id="pageMap" x-hidden class="space-y-5">
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-[#E7DFD2]">
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex items-center gap-2 text-gray-500"><i data-lucide="credit-card" class="w-4 h-4"></i><h2 class="font-black">結算轉帳</h2></div>
+          <select id="settlementCurrency" onchange="window.refreshUI()" title="結算幣別" class="bg-gray-50 border border-gray-100 text-xs px-2 py-1 rounded-md font-bold outline-none cursor-pointer"></select>
+        </div>
+        <div id="transfersList" class="space-y-2"></div>
       </div>
-      <div id="mapLayerChips" class="grid grid-cols-3 gap-2 mb-4"></div>
-      <div id="mapView" class="w-full h-[60vh] min-h-[400px] rounded-2xl overflow-hidden border border-gray-100 shadow-sm z-0"></div>
-      <p id="mapEmpty" class="text-center text-xs text-gray-300 font-bold mt-3"></p>
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-[#E7DFD2]">
+        <div class="flex justify-between items-center mb-4">
+          <div class="flex items-center gap-2 text-gray-500"><i data-lucide="file-text" class="w-4 h-4"></i><h2 class="font-black">總額彙整</h2></div>
+          <select id="summaryCurrency" onchange="window.refreshUI()" title="彙整幣別" class="bg-gray-50 border border-gray-100 text-xs px-2 py-1 rounded-md font-bold outline-none cursor-pointer"></select>
+        </div>
+        <div id="summaryList" class="space-y-4"></div>
+      </div>
     </div>
 
     <!-- 清單頁面 -->
@@ -138,11 +168,11 @@
         <button id="listTabWish" onclick="window.setListType('wish')" class="listtab flex-1 px-4 py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-1.5 transition-all"><i data-lucide="sparkles" class="w-4 h-4"></i>願望清單</button>
         <button id="listTabBuy" onclick="window.setListType('buy')" class="listtab flex-1 px-4 py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-1.5 transition-all"><i data-lucide="shopping-bag" class="w-4 h-4"></i>必買清單</button>
       </div>
-      <div class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-4 mb-4">
+      <div class="bg-white rounded-2xl shadow-sm border border-[#E7DFD2] p-4 mb-4">
         <div class="flex gap-2">
           <input id="newListInput" type="text" placeholder="新增項目…" onkeydown="if(event.key==='Enter')window.addListItem()" class="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-gray-50 font-bold outline-none focus:border-blue-400" />
           <select id="newListMember" title="誰的" class="border border-gray-200 rounded-lg px-2 text-xs bg-gray-50 font-bold outline-none cursor-pointer max-w-[90px]"></select>
-          <button onclick="window.addListItem()" title="新增" class="bg-[#3B82F6] text-white px-4 rounded-lg hover:bg-blue-600 shrink-0"><i data-lucide="plus" class="w-4 h-4"></i></button>
+          <button onclick="window.addListItem()" title="新增" class="bg-[#77875F] text-white px-4 rounded-lg hover:bg-blue-600 shrink-0"><i data-lucide="plus" class="w-4 h-4"></i></button>
         </div>
       </div>
       <div id="listProgress" class="mb-3"></div>
@@ -151,7 +181,7 @@
 
     <!-- 匯率頁面 -->
     <div id="pageRates" x-hidden class="max-w-lg mx-auto">
-      <div class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6">
+      <div class="bg-white rounded-2xl shadow-sm border border-[#E7DFD2] p-6">
         <div class="flex items-center justify-between mb-1">
           <div class="flex items-center gap-2 text-gray-500"><i data-lucide="arrow-right-left" class="w-4 h-4"></i><h2 class="font-black">即時匯率換算</h2></div>
           <button onclick="window.loadLiveRates(true)" title="重新整理" class="text-blue-500 hover:text-blue-600 flex items-center gap-1 text-xs"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>更新</button>
@@ -178,9 +208,9 @@
     <!-- FAB 新增 -->
     <div class="fixed bottom-0 left-0 right-0 z-40 pointer-events-none">
       <div class="max-w-[480px] mx-auto relative h-0">
-        <button id="addExpenseBtn" onclick="window.openAddExpense()" title="新增支出" class="pointer-events-auto absolute right-4 bottom-[80px] w-14 h-14 rounded-full bg-[#3B82F6] text-white shadow-xl flex items-center justify-center active:scale-95"><i data-lucide="plus" class="w-6 h-6"></i></button>
-        <button id="addFlightBtn" onclick="window.openAddFlight()" x-hidden title="新增航班" class="pointer-events-auto absolute right-4 bottom-[80px] w-14 h-14 rounded-full bg-[#3B82F6] text-white shadow-xl flex items-center justify-center active:scale-95"><i data-lucide="plus" class="w-6 h-6"></i></button>
-        <button id="addItinBtn" onclick="window.openAddItin()" x-hidden title="新增行程" class="pointer-events-auto absolute right-4 bottom-[80px] w-14 h-14 rounded-full bg-[#3B82F6] text-white shadow-xl flex items-center justify-center active:scale-95"><i data-lucide="plus" class="w-6 h-6"></i></button>
+        <button id="addExpenseBtn" onclick="window.openAddExpense()" title="新增支出" class="pointer-events-auto absolute right-4 bottom-[80px] w-14 h-14 rounded-full bg-[#77875F] text-white shadow-xl flex items-center justify-center active:scale-95"><i data-lucide="plus" class="w-6 h-6"></i></button>
+        <button id="addFlightBtn" onclick="window.openAddFlight()" x-hidden title="新增航班" class="pointer-events-auto absolute right-4 bottom-[80px] w-14 h-14 rounded-full bg-[#77875F] text-white shadow-xl flex items-center justify-center active:scale-95"><i data-lucide="plus" class="w-6 h-6"></i></button>
+        <button id="addItinBtn" onclick="window.openAddItin()" x-hidden title="新增行程" class="pointer-events-auto absolute right-4 bottom-[80px] w-14 h-14 rounded-full bg-[#77875F] text-white shadow-xl flex items-center justify-center active:scale-95"><i data-lucide="plus" class="w-6 h-6"></i></button>
       </div>
     </div>
 
@@ -191,7 +221,7 @@
         <button id="tab_trip" onclick="window.setPage('trip')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="wallet" class="w-5 h-5"></i><span class="text-[10px] font-black">記帳</span></button>
         <button id="tab_flight" onclick="window.setPage('flight')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="plane" class="w-5 h-5"></i><span class="text-[10px] font-black">航班</span></button>
         <button id="tab_itin" onclick="window.setPage('itin')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="calendar-days" class="w-5 h-5"></i><span class="text-[10px] font-black">行程</span></button>
-        <button id="tab_map" onclick="window.setPage('map')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="map" class="w-5 h-5"></i><span class="text-[10px] font-black">地圖</span></button>
+        <button id="tab_map" onclick="window.setPage('map')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="calculator" class="w-5 h-5"></i><span class="text-[10px] font-black">結算</span></button>
         <button id="tab_list" onclick="window.setPage('list')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="check-square" class="w-5 h-5"></i><span class="text-[10px] font-black">清單</span></button>
         <button id="tab_rate" onclick="window.setPage('rate')" class="navbtn flex-1 flex flex-col items-center gap-0.5 py-2.5 text-gray-400"><i data-lucide="arrow-right-left" class="w-5 h-5"></i><span class="text-[10px] font-black">匯率</span></button>
       </div>
@@ -200,7 +230,7 @@
 
   <!-- 帳本 Modal -->
   <div id="tripModal" class="modal">
-    <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-[#E5E7EB] overflow-hidden">
+    <div class="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-[#E7DFD2] overflow-hidden">
       <div class="p-5 border-b flex justify-between items-center bg-gray-50">
         <h2 id="tripModalTitle" class="text-base font-black text-gray-700">選擇帳本</h2>
         <button id="tripModalClose" onclick="window.closeModal('tripModal')" title="關閉"><i data-lucide="x" class="w-5 h-5"></i></button>
@@ -235,7 +265,7 @@
       <div class="p-6 space-y-5">
         <p class="text-[10px] text-gray-400 font-bold">設定每 1 單位外幣兌換多少 TWD</p>
         <div id="ratesList" class="space-y-4"></div>
-        <button onclick="window.closeModal('ratesModal')" class="w-full bg-[#3B82F6] text-white py-3 rounded-xl font-black text-sm hover:bg-blue-600 shadow-lg">完成設定</button>
+        <button onclick="window.closeModal('ratesModal')" class="w-full bg-[#77875F] text-white py-3 rounded-xl font-black text-sm hover:bg-blue-600 shadow-lg">完成設定</button>
       </div>
     </div>
   </div>
@@ -290,8 +320,16 @@
         <div id="estimateBox" class="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 hidden space-y-2"></div>
       </div>
       <div class="p-4 border-t border-gray-50 shrink-0">
-        <button id="saveBtn" onclick="window.saveExpense()" class="w-full bg-[#3B82F6] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 disabled:bg-gray-300 disabled:shadow-none flex justify-center items-center gap-2 transition-colors">確認儲存</button>
+        <button id="saveBtn" onclick="window.saveExpense()" class="w-full bg-[#77875F] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 disabled:bg-gray-300 disabled:shadow-none flex justify-center items-center gap-2 transition-colors">確認儲存</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 收據圖片預覽 Modal -->
+  <div id="imgPreviewModal" class="modal" onclick="window.closeModal('imgPreviewModal')">
+    <div class="relative max-w-[92vw] max-h-[88vh]">
+      <button onclick="window.closeModal('imgPreviewModal')" title="關閉" class="absolute -top-3 -right-3 bg-white text-gray-600 rounded-full w-9 h-9 flex items-center justify-center shadow-lg"><i data-lucide="x" class="w-5 h-5"></i></button>
+      <img id="imgPreviewImg" alt="收據預覽" class="max-w-[92vw] max-h-[88vh] rounded-2xl shadow-2xl object-contain bg-white" />
     </div>
   </div>
 
@@ -300,7 +338,7 @@
     <div class="bg-white w-full max-w-xs rounded-2xl shadow-2xl p-8 flex flex-col items-center">
       <div class="bg-green-50 text-green-500 p-4 rounded-full mb-4"><i data-lucide="check-circle-2" class="w-10 h-10"></i></div>
       <h2 class="text-lg font-black text-gray-700 mb-6">已儲存</h2>
-      <button onclick="window.closeModal('successModal')" class="w-full bg-[#3B82F6] text-white py-3 rounded-xl font-black">確認</button>
+      <button onclick="window.closeModal('successModal')" class="w-full bg-[#77875F] text-white py-3 rounded-xl font-black">確認</button>
     </div>
   </div>
 
@@ -348,7 +386,7 @@
       </div>
       <div class="p-4 border-t border-gray-50 shrink-0 flex gap-3">
         <button id="flightDeleteBtn" onclick="window.deleteFlight()" x-hidden class="px-5 py-3.5 rounded-xl font-black text-red-500 bg-red-50 hover:bg-red-100"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
-        <button id="flightSaveBtn" onclick="window.saveFlight()" class="flex-1 bg-[#3B82F6] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 disabled:bg-gray-300 flex justify-center items-center gap-2 transition-colors">確認儲存</button>
+        <button id="flightSaveBtn" onclick="window.saveFlight()" class="flex-1 bg-[#77875F] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 disabled:bg-gray-300 flex justify-center items-center gap-2 transition-colors">確認儲存</button>
       </div>
     </div>
   </div>
@@ -373,7 +411,7 @@
       </div>
       <div class="p-4 border-t border-gray-50 shrink-0 flex gap-3">
         <button id="itinDeleteBtn" onclick="window.deleteItin()" x-hidden class="px-5 py-3.5 rounded-xl font-black text-red-500 bg-red-50 hover:bg-red-100"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
-        <button id="itinSaveBtn" onclick="window.saveItin()" class="flex-1 bg-[#3B82F6] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 disabled:bg-gray-300 flex justify-center items-center gap-2 transition-colors">確認儲存</button>
+        <button id="itinSaveBtn" onclick="window.saveItin()" class="flex-1 bg-[#77875F] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 disabled:bg-gray-300 flex justify-center items-center gap-2 transition-colors">確認儲存</button>
       </div>
     </div>
   </div>
@@ -404,7 +442,7 @@
         </div>
       </div>
       <div class="p-4 border-t border-gray-50 shrink-0">
-        <button onclick="window.saveTripMeta()" class="w-full bg-[#3B82F6] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 flex justify-center items-center gap-2">儲存旅程設定</button>
+        <button onclick="window.saveTripMeta()" class="w-full bg-[#77875F] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 flex justify-center items-center gap-2">儲存旅程設定</button>
       </div>
     </div>
   </div>
@@ -423,7 +461,7 @@
         <button onclick="window.addLodgingRow()" class="w-full border-2 border-dashed border-gray-200 text-gray-400 hover:text-blue-500 hover:border-blue-300 rounded-xl py-2 text-xs font-black flex items-center justify-center gap-1 transition-all"><i data-lucide="plus" class="w-3.5 h-3.5"></i>新增一間住宿</button>
       </div>
       <div class="p-4 border-t border-gray-50 shrink-0">
-        <button onclick="window.saveLodging()" class="w-full bg-[#3B82F6] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 flex justify-center items-center gap-2">儲存住宿</button>
+        <button onclick="window.saveLodging()" class="w-full bg-[#77875F] text-white py-3.5 rounded-xl font-black shadow-md active:scale-95 flex justify-center items-center gap-2">儲存住宿</button>
       </div>
     </div>
   </div>
@@ -467,14 +505,14 @@
 
     // 行程類型 → 顏色 / 圖示 / 地圖圖層
     const ITIN_TYPES = {
-      '景點': { color: '#f59e0b', icon: 'camera', layer: 'sight' },
-      '餐廳': { color: '#ef4444', icon: 'utensils', layer: 'food' },
-      '交通': { color: '#3b82f6', icon: 'train-front', layer: 'other' },
-      '住宿': { color: '#8b5cf6', icon: 'bed-double', layer: 'stay' },
-      '購物': { color: '#ec4899', icon: 'shopping-bag', layer: 'other' },
-      '其他': { color: '#6b7280', icon: 'map-pin', layer: 'other' }
+      '景點': { color: '#C9A66B', icon: 'camera', layer: 'sight' },
+      '餐廳': { color: '#C08267', icon: 'utensils', layer: 'food' },
+      '交通': { color: '#7E96A6', icon: 'train-front', layer: 'other' },
+      '住宿': { color: '#A2929E', icon: 'bed-double', layer: 'stay' },
+      '購物': { color: '#BC93A0', icon: 'shopping-bag', layer: 'other' },
+      '其他': { color: '#9E9384', icon: 'map-pin', layer: 'other' }
     };
-    const LODGE_COLORS = ['#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#6366f1'];
+    const LODGE_COLORS = ['#A2929E', '#7E96A6', '#8E9E78', '#C9A66B', '#BC93A0', '#8B86A6'];
     const PAGE_MAP = {
       home:   { el: 'pageHome',        tab: 'tab_home',   add: null },
       trip:   { el: 'tripContent',     tab: 'tab_trip',   add: 'addExpenseBtn' },
@@ -645,7 +683,7 @@
         itinerary.sort((a, b) => (a.date > b.date ? 1 : a.date < b.date ? -1 : ((a.time || '') > (b.time || '') ? 1 : -1)));
         renderItinerary();
         renderHome();
-        if (currentPage === 'map') renderMap();
+        if (currentPage === 'map') { renderSummary(); renderSettlement(); }
       });
 
       const listsRef = collection(db, 'artifacts', appId, 'public', 'data', `lists_${activeTripId}`);
@@ -662,7 +700,6 @@
       renderExpenses();
       renderSummary();
       renderSettlement();
-      if (currentView === 'map') renderMap();
       icons();
     };
 
@@ -680,7 +717,7 @@
       if (p === 'home') renderHome();
       else if (p === 'flight') window.renderFlights();
       else if (p === 'itin') renderItinerary();
-      else if (p === 'map') renderMap();
+      else if (p === 'map') { renderSummary(); renderSettlement(); }
       else if (p === 'list') renderLists();
       else if (p === 'rate') renderRatesPage();
       icons();
@@ -732,9 +769,9 @@
 
       $('flightsList').innerHTML = list.length ? list.map(f => {
         const dur = f.duration || calcDuration(f.depTime, f.arrTime);
-        return `<div onclick="window.editFlight('${f.dbId}')" class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-6 cursor-pointer hover:shadow-md hover:border-blue-200 transition-all">
+        return `<div onclick="window.editFlight('${f.dbId}')" class="bg-white rounded-2xl shadow-sm border border-[#E7DFD2] p-6 cursor-pointer hover:shadow-md hover:border-blue-200 transition-all">
           <div class="flex justify-between items-center mb-5">
-            <div class="flex items-center gap-2 text-sm font-black text-[#3B82F6]">
+            <div class="flex items-center gap-2 text-sm font-black text-[#77875F]">
               <span>${esc(f.number || '航班')}</span>
               <span class="text-gray-300">·</span>
               <span class="text-gray-400 font-bold">${esc(f.direction || '')}</span>
@@ -854,7 +891,7 @@
     };
 
     // ===== 地圖（Leaflet + Nominatim）=====
-    const CAT_COLOR = { '住宿': '#8b5cf6', '餐飲': '#ef4444', '交通': '#3b82f6', '購物': '#ec4899', '娛樂': '#f59e0b', '雜費': '#6b7280' };
+    const CAT_COLOR = { '住宿': '#A2929E', '餐飲': '#C08267', '交通': '#7E96A6', '購物': '#BC93A0', '娛樂': '#C9A66B', '雜費': '#9E9384' };
     const geoCache = {};
 
     async function geocode(query) {
@@ -879,7 +916,7 @@
     function navBtn(lat, lng, name) {
       const q = name ? encodeURIComponent(name) : `${lat},${lng}`;
       const url = `https://www.google.com/maps/dir/?api=1&destination=${q}`;
-      return `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;background:#3B82F6;color:#fff;font-weight:800;font-size:11px;padding:5px 10px;border-radius:8px;text-decoration:none">🧭 Google Maps 導航</a>`;
+      return `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;background:#77875F;color:#fff;font-weight:800;font-size:11px;padding:5px 10px;border-radius:8px;text-decoration:none">🧭 Google Maps 導航</a>`;
     }
 
     function collectMapPoints() {
@@ -914,7 +951,7 @@
       mapPointsForDate().forEach(p => { counts[p.cat] = (counts[p.cat] || 0) + 1; });
       $('mapLayerChips').innerHTML = CATEGORIES.map(cat => {
         const on = mapLayerOn[cat] !== false;
-        const color = CAT_COLOR[cat] || '#6b7280';
+        const color = CAT_COLOR[cat] || '#9E9384';
         return `<button onclick="window.toggleLayer('${cat}')" class="flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-black border transition-all ${on ? 'text-white shadow-sm' : 'bg-white text-gray-300 border-gray-100'}" style="${on ? `background:${color};border-color:${color}` : ''}">
           <i data-lucide="${CAT_ICON[cat]}" class="w-3 h-3"></i>${cat} <span class="opacity-70">${counts[cat] || 0}</span>
         </button>`;
@@ -936,7 +973,7 @@
         if (lat == null || lng == null) { alert('尚未定位到「' + l.name + '」，請稍後再試'); return; }
         map.setView([lat, lng], 15);
         L.popup().setLatLng([lat, lng]).setContent(
-          `<div style="font-family:sans-serif;min-width:150px"><div style="font-weight:800;font-size:14px">${esc(l.name)}</div><div style="color:#8b5cf6;font-weight:700;font-size:11px">住宿 · ${l.nights || 1} 晚</div>${navBtn(lat, lng, l.name)}</div>`
+          `<div style="font-family:sans-serif;min-width:150px"><div style="font-weight:800;font-size:14px">${esc(l.name)}</div><div style="color:#A2929E;font-weight:700;font-size:11px">住宿 · ${l.nights || 1} 晚</div>${navBtn(lat, lng, l.name)}</div>`
         ).openOn(map);
       }, 400);
     };
@@ -963,7 +1000,7 @@
 
       const bounds = [];
       pts.forEach(p => {
-        const color = CAT_COLOR[p.cat] || '#6b7280';
+        const color = CAT_COLOR[p.cat] || '#9E9384';
         const marker = L.circleMarker([p.lat, p.lng], {
           radius: 9, fillColor: color, color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.9
         }).addTo(map);
@@ -1011,7 +1048,7 @@
     // ===== 成員 =====
     function renderPeople() {
       $('peopleList').innerHTML = people.map((p, idx) => `
-        <span class="bg-[#F3F4F6] border border-[#E5E7EB] px-3 py-1.5 rounded-lg text-sm flex items-center gap-2">
+        <span class="bg-[#F3EEE5] border border-[#E7DFD2] px-3 py-1.5 rounded-lg text-sm flex items-center gap-2">
           ${esc(p)}
           <button onclick="window.removePerson(${idx})" title="刪除成員" class="text-red-300 hover:text-red-500 transition-colors"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
         </span>`).join('') || `<span class="text-gray-300 text-sm">尚無成員</span>`;
@@ -1126,7 +1163,7 @@
       $('expenseList').innerHTML = list.length ? list.map(exp => `
         <div class="flex items-center gap-4 p-4 border border-gray-50 rounded-xl hover:bg-gray-50 group transition-all">
           <div class="w-14 h-14 bg-white border border-gray-100 rounded-lg flex items-center justify-center text-gray-200 shrink-0 shadow-sm overflow-hidden">
-            ${exp.previewUrl ? `<img src="${exp.previewUrl}" alt="收據" class="w-full h-full object-cover" />` : `<i data-lucide="image" class="w-6 h-6"></i>`}
+            ${exp.previewUrl ? `<img src="${exp.previewUrl}" alt="收據" onclick="event.stopPropagation();window.previewImage('${exp.dbId}')" class="w-full h-full object-cover cursor-zoom-in" />` : `<i data-lucide="image" class="w-6 h-6"></i>`}
           </div>
           <div class="flex-1 min-w-0">
             <div class="text-[10px] text-gray-400 mb-1 flex items-center flex-wrap gap-1.5">
@@ -1151,6 +1188,14 @@
     }
 
     window.setMonthFilter = (v) => { selectedMonth = v; renderExpenses(); };
+
+    window.previewImage = (id) => {
+      const exp = expensesCache[id];
+      if (!exp || !exp.previewUrl) return;
+      $('imgPreviewImg').src = exp.previewUrl;
+      $('imgPreviewModal').classList.add('active');
+      icons();
+    };
 
     window.deleteExpense = async (id) => {
       if (confirm('確定刪除？') && isAuthed) {
@@ -1177,14 +1222,15 @@
       }).join('');
       const grandTarget = grandTWD / (rates[sumCur] || 1);
       container.innerHTML = `
-        <div class="max-h-60 overflow-y-auto space-y-3 text-sm pr-1">${rows}</div>
-        <div class="pt-4 border-t-2 border-blue-50 flex justify-between items-center text-lg font-black text-[#3B82F6]">
+        <div class="max-h-[calc(100vh-360px)] min-h-[200px] overflow-y-auto space-y-3 text-sm pr-1">${rows}</div>
+        <div class="pt-4 border-t-2 border-blue-50 flex justify-between items-center text-lg font-black text-[#77875F]">
           <span class="text-xs text-blue-300 uppercase">總計折合</span>
           <span>${sumCur} ${Math.round(grandTarget).toLocaleString()}</span>
         </div>`;
     }
 
     // ===== 結算轉帳（兩兩沖銷）=====
+    function transfersCount() { try { return computeSettlement().length; } catch (e) { return 0; } }
     function computeSettlement() {
       const sumCur = $('settlementCurrency').value;
       const targetRate = rates[sumCur] || 1;
@@ -1497,7 +1543,7 @@
         const toStart = daysBetween(t, s);
         let inner;
         if (toStart > 0) {
-          inner = `<div class="flex items-baseline gap-2"><span class="text-xs text-blue-300 font-black uppercase tracking-widest">出發倒數</span></div><div class="flex items-baseline gap-2"><span class="text-5xl font-black text-[#3B82F6]">${toStart}</span><span class="text-lg font-black text-gray-400">天</span></div>`;
+          inner = `<div class="flex items-baseline gap-2"><span class="text-xs text-blue-300 font-black uppercase tracking-widest">出發倒數</span></div><div class="flex items-baseline gap-2"><span class="text-5xl font-black text-[#77875F]">${toStart}</span><span class="text-lg font-black text-gray-400">天</span></div>`;
         } else {
           const total = e ? daysBetween(s, e) + 1 : null;
           const dayN = daysBetween(s, t) + 1;
@@ -1510,7 +1556,7 @@
       // 住宿卡（點擊跳地圖定位）
       const lodgings = tripMeta.lodgings || [];
       $('homeLodging').innerHTML = lodgings.length ? `
-        <div class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-5">
+        <div class="bg-white rounded-2xl shadow-sm border border-[#E7DFD2] p-5">
           <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-2 text-gray-500"><i data-lucide="bed-double" class="w-4 h-4"></i><h2 class="font-black">住宿</h2></div>
             <button onclick="window.openLodgingModal()" class="text-blue-500 hover:text-blue-600 text-xs flex items-center gap-1"><i data-lucide="pencil" class="w-3.5 h-3.5"></i>編輯</button>
@@ -1518,7 +1564,7 @@
           <div class="space-y-2">
             ${lodgings.map((l, i) => `
               <button onclick="window.gotoLodging(${i})" class="w-full flex items-center gap-3 text-left p-3 rounded-xl border border-gray-50 hover:border-blue-200 hover:bg-blue-50/40 transition-all">
-                <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${l.color || '#8b5cf6'}"></div>
+                <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${l.color || '#A2929E'}"></div>
                 <div class="flex-1 min-w-0">
                   <div class="font-black text-gray-700 truncate">${esc(l.name)}</div>
                   <div class="text-[11px] text-gray-400 font-bold">${l.checkin ? mdw(l.checkin) : ''} · ${l.nights || 1} 晚${l.amount ? ` · ${esc(l.currency || '')} ${Math.round(parseFloat(l.amount)).toLocaleString()}` : ''}</div>
@@ -1528,23 +1574,64 @@
           </div>
         </div>` : `<button onclick="window.openLodgingModal()" class="w-full bg-white rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 hover:text-blue-500 hover:border-blue-300 p-4 font-black text-sm flex items-center justify-center gap-2 transition-all"><i data-lucide="bed-double" class="w-4 h-4"></i>新增住宿</button>`;
 
+      // 小萬年曆（當月）
+      renderHomeCalendar();
+
       // 目次磚
-      const mapPts = collectMapPoints().length;
       const listDone = lists.filter(l => l.done).length;
       const tiles = [
-        { p: 'trip',   icon: 'wallet',       label: '記帳',   sub: `${expenses.length} 筆`,   bg: '#eff6ff', fg: '#3b82f6' },
-        { p: 'flight', icon: 'plane',        label: '航班',   sub: `${flights.length} 段`,    bg: '#eef2ff', fg: '#6366f1' },
-        { p: 'itin',   icon: 'calendar-days',label: '行程',   sub: `${itinerary.length} 項`,  bg: '#f0fdf4', fg: '#10b981' },
-        { p: 'map',    icon: 'map',          label: '地圖',   sub: `${mapPts} 地點`,          bg: '#fff7ed', fg: '#f59e0b' },
-        { p: 'list',   icon: 'check-square', label: '清單',   sub: `${listDone}/${lists.length} 完成`, bg: '#fdf2f8', fg: '#ec4899' },
-        { p: 'rate',   icon: 'arrow-right-left', label: '匯率', sub: liveRates ? '即時' : '換算', bg: '#ecfeff', fg: '#0ea5e9' }
+        { p: 'trip',   icon: 'wallet',       label: '記帳',   sub: `${expenses.length} 筆`,   bg: '#EEF1E9', fg: '#77875F' },
+        { p: 'flight', icon: 'plane',        label: '航班',   sub: `${flights.length} 段`,    bg: '#EAEFF2', fg: '#7E96A6' },
+        { p: 'itin',   icon: 'calendar-days',label: '行程',   sub: `${itinerary.length} 項`,  bg: '#F3EDE6', fg: '#B58C6B' },
+        { p: 'map',    icon: 'calculator',   label: '結算',   sub: `${transfersCount()} 筆轉帳`,   bg: '#F6EFE4', fg: '#BE9B5E' },
+        { p: 'list',   icon: 'check-square', label: '清單',   sub: `${listDone}/${lists.length} 完成`, bg: '#F4ECEF', fg: '#A66980' },
+        { p: 'rate',   icon: 'arrow-right-left', label: '匯率', sub: liveRates ? '即時' : '換算', bg: '#EFEDE7', fg: '#9E9384' }
       ];
       $('homeTiles').innerHTML = tiles.map(t => `
-        <button onclick="window.setPage('${t.p}')" class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-5 text-left hover:shadow-md hover:-translate-y-0.5 transition-all">
+        <button onclick="window.setPage('${t.p}')" class="bg-white rounded-2xl shadow-sm border border-[#E7DFD2] p-5 text-left hover:shadow-md hover:-translate-y-0.5 transition-all">
           <div class="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style="background:${t.bg};color:${t.fg}"><i data-lucide="${t.icon}" class="w-5 h-5"></i></div>
           <div class="font-black text-gray-700">${t.label}</div>
           <div class="text-xs text-gray-400 font-bold mt-0.5">${t.sub}</div>
         </button>`).join('');
+      icons();
+    }
+
+    // 小萬年曆：只呈現當月
+    function renderHomeCalendar() {
+      const now = new Date();
+      const y = now.getFullYear(), m = now.getMonth();
+      const t = todayStr();
+      const first = new Date(y, m, 1);
+      const startDow = first.getDay();
+      const daysInMonth = new Date(y, m + 1, 0).getDate();
+      // 有記帳或行程的日子
+      const marked = new Set();
+      expenses.forEach(e => { if (e.date) marked.add(e.date); });
+      itinerary.forEach(i => { if (i.date) marked.add(i.date); });
+      const pad = (n) => String(n).padStart(2, '0');
+      const cells = [];
+      for (let i = 0; i < startDow; i++) cells.push('<div></div>');
+      for (let d = 1; d <= daysInMonth; d++) {
+        const ds = `${y}-${pad(m + 1)}-${pad(d)}`;
+        const isToday = ds === t;
+        const has = marked.has(ds);
+        const dow = new Date(y, m, d).getDay();
+        const weekend = dow === 0 || dow === 6;
+        cells.push(`<div class="relative flex flex-col items-center justify-center aspect-square rounded-lg text-xs font-black ${isToday ? 'bg-blue-500 text-white shadow-sm' : weekend ? 'text-blue-400' : 'text-gray-600'}">
+          ${d}${has && !isToday ? '<span class="absolute bottom-1 w-1 h-1 rounded-full bg-blue-400"></span>' : ''}
+        </div>`);
+      }
+      $('homeCalendar').innerHTML = `
+        <div class="bg-gray-50 rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2 text-gray-500"><i data-lucide="calendar" class="w-4 h-4"></i><h2 class="font-black">${y} 年 ${m + 1} 月</h2></div>
+            <span class="text-[10px] text-gray-400 font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>有紀錄</span>
+          </div>
+          <div class="grid grid-cols-7 gap-1 mb-1">
+            ${['日','一','二','三','四','五','六'].map((w, i) => `<div class="text-center text-[10px] font-black ${i === 0 || i === 6 ? 'text-blue-300' : 'text-gray-300'}">${w}</div>`).join('')}
+          </div>
+          <div class="grid grid-cols-7 gap-1">${cells.join('')}</div>
+        </div>`;
       icons();
     }
 
@@ -1604,9 +1691,9 @@
       const cd = $('itinCountdown');
       if (s) {
         const toStart = daysBetween(todayStr(), s);
-        cd.innerHTML = `<div class="bg-white rounded-2xl shadow-sm border border-[#E5E7EB] p-4 flex items-center justify-between">
+        cd.innerHTML = `<div class="bg-white rounded-2xl shadow-sm border border-[#E7DFD2] p-4 flex items-center justify-between">
           <div class="flex items-center gap-2 text-gray-500"><i data-lucide="calendar-days" class="w-4 h-4"></i><span class="font-black">行程總覽</span></div>
-          <span class="text-sm font-black ${toStart > 0 ? 'text-[#3B82F6]' : 'text-emerald-500'}">${toStart > 0 ? '出發倒數 ' + toStart + ' 天' : '旅程進行中'}</span>
+          <span class="text-sm font-black ${toStart > 0 ? 'text-[#77875F]' : 'text-emerald-500'}">${toStart > 0 ? '出發倒數 ' + toStart + ' 天' : '旅程進行中'}</span>
         </div>`;
       } else cd.innerHTML = '';
 
@@ -1632,7 +1719,7 @@
         const isToday = date === t;
         const dayN = tripMeta.startDate ? daysBetween(tripMeta.startDate, date) + 1 : null;
         const lodge = lodgingForDate(date);
-        return `<div class="bg-white rounded-2xl shadow-sm border ${isToday ? 'border-blue-400 ring-2 ring-blue-100' : 'border-[#E5E7EB]'} overflow-hidden">
+        return `<div class="bg-white rounded-2xl shadow-sm border ${isToday ? 'border-blue-400 ring-2 ring-blue-100' : 'border-[#E7DFD2]'} overflow-hidden">
           <div class="flex items-center justify-between px-5 py-3 ${isToday ? 'bg-blue-50' : 'bg-gray-50'}">
             <div class="flex items-center gap-2">
               ${dayN ? `<span class="text-xs font-black ${isToday ? 'text-blue-500' : 'text-gray-400'}">DAY ${dayN}</span>` : ''}
@@ -1640,15 +1727,15 @@
               ${isToday ? '<span class="bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-black">今天</span>' : ''}
             </div>
           </div>
-          ${lodge ? `<div class="flex items-center gap-2 px-5 py-2 text-xs font-black text-white" style="background:${lodge.color || '#8b5cf6'}"><i data-lucide="bed-double" class="w-3.5 h-3.5"></i>${esc(lodge.name)} · 第 ${lodge.night} 晚</div>` : ''}
+          ${lodge ? `<div class="flex items-center gap-2 px-5 py-2 text-xs font-black text-white" style="background:${lodge.color || '#A2929E'}"><i data-lucide="bed-double" class="w-3.5 h-3.5"></i>${esc(lodge.name)} · 第 ${lodge.night} 晚</div>` : ''}
           <div class="p-4 space-y-1">
             ${items.length ? items.map(it => {
               if (it._spend) {
                 return `<div onclick="window.editExpense('${it.dbId}')" class="flex gap-3 p-2 rounded-xl hover:bg-sky-50 cursor-pointer group">
                 <div class="flex flex-col items-center pt-0.5 w-12 shrink-0"><span class="text-xs font-black text-gray-600">${esc(it.time || '—')}</span></div>
-                <div class="flex flex-col items-center shrink-0"><div class="w-3 h-3 rounded-full mt-1" style="background:#0ea5e9"></div><div class="flex-1 w-0.5 bg-gray-100 my-1"></div></div>
+                <div class="flex flex-col items-center shrink-0"><div class="w-3 h-3 rounded-full mt-1" style="background:#7E96A6"></div><div class="flex-1 w-0.5 bg-gray-100 my-1"></div></div>
                 <div class="flex-1 min-w-0 pb-2">
-                  <div class="flex items-center gap-1.5"><i data-lucide="receipt" class="w-3.5 h-3.5" style="color:#0ea5e9"></i><span class="font-black text-gray-700 truncate">${esc(it.title)}</span><span class="text-[10px] font-black text-sky-500 shrink-0">${esc(it.currency)} ${Math.round(it.amount).toLocaleString()}</span></div>
+                  <div class="flex items-center gap-1.5"><i data-lucide="receipt" class="w-3.5 h-3.5" style="color:#7E96A6"></i><span class="font-black text-gray-700 truncate">${esc(it.title)}</span><span class="text-[10px] font-black text-sky-500 shrink-0">${esc(it.currency)} ${Math.round(it.amount).toLocaleString()}</span></div>
                   ${it.location ? `<div class="text-[11px] text-gray-400 font-bold mt-0.5 flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3"></i>${esc(it.location)}</div>` : ''}
                   <div class="text-[10px] text-sky-400 font-bold mt-0.5">消費·點可編輯</div>
                 </div>
@@ -1756,7 +1843,7 @@
       const done = items.filter(i => i.done).length;
       $('listProgress').innerHTML = items.length ? `<div class="flex items-center gap-3"><div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-blue-400 rounded-full transition-all" style="width:${Math.round(done/items.length*100)}%"></div></div><span class="text-xs text-gray-400 font-black">${done}/${items.length}</span></div>` : '';
       $('listItems').innerHTML = items.length ? items.map(it => `
-        <div class="flex items-center gap-3 bg-white rounded-xl border border-[#E5E7EB] px-4 py-3 group">
+        <div class="flex items-center gap-3 bg-white rounded-xl border border-[#E7DFD2] px-4 py-3 group">
           <button onclick="window.toggleListItem('${it.dbId}')" title="完成" class="shrink-0 w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${it.done ? 'bg-blue-500 border-blue-500 text-white' : 'border-gray-200 text-transparent hover:border-blue-300'}"><i data-lucide="check" class="w-4 h-4"></i></button>
           <div class="flex-1 min-w-0">
             <div class="font-bold ${it.done ? 'text-gray-300 line-through' : 'text-gray-700'} truncate">${esc(it.text)}</div>
@@ -1873,7 +1960,7 @@
     function renderLodgingDraft() {
       const curOpts = CURRENCIES.map(c => c.code).join(',');
       $('lodgingEditList').innerHTML = lodgingDraft.map((l, i) => `
-        <div class="border border-gray-100 rounded-xl p-3 space-y-2" style="border-left:4px solid ${l.color || '#8b5cf6'}">
+        <div class="border border-gray-100 rounded-xl p-3 space-y-2" style="border-left:4px solid ${l.color || '#A2929E'}">
           <div class="flex gap-2">
             <input value="${esc(l.name || '')}" oninput="window.setLodgingField(${i},'name',this.value)" placeholder="飯店名稱/地點" class="flex-1 border-b border-gray-100 py-1 text-sm font-bold outline-none focus:border-blue-400 bg-transparent" />
             <button onclick="window.removeLodgingRow(${i})" title="移除" class="text-red-300 hover:text-red-500"><i data-lucide="x" class="w-4 h-4"></i></button>
