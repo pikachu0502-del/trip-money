@@ -1942,6 +1942,7 @@
     window.openLodgingModal = () => {
       if (!activeTripId) return;
       lodgingDraft = (tripMeta.lodgings || []).map(l => ({ ...l }));
+      sortLodgingDraft();
       renderLodgingDraft();
       window.openModal('lodgingModal');
     };
@@ -1956,7 +1957,13 @@
     };
     window.addLodgingRow = () => { lodgingDraft.push({ name: '', checkin: tripMeta.startDate || todayStr(), nights: 1, amount: '', currency: tripMeta.foreignCurrency || 'TWD', color: LODGE_COLORS[lodgingDraft.length % LODGE_COLORS.length] }); renderLodgingDraft(); };
     window.removeLodgingRow = (i) => { lodgingDraft.splice(i, 1); renderLodgingDraft(); };
-    window.setLodgingField = (i, f, v) => { lodgingDraft[i][f] = f === 'nights' ? (parseInt(v) || 1) : v; };
+    window.setLodgingField = (i, f, v) => {
+      lodgingDraft[i][f] = f === 'nights' ? (parseInt(v) || 1) : v;
+      if (f === 'checkin') { sortLodgingDraft(); renderLodgingDraft(); }
+    };
+    function sortLodgingDraft() {
+      lodgingDraft.sort((a, b) => (a.checkin || '9999-12-31') > (b.checkin || '9999-12-31') ? 1 : (a.checkin || '9999-12-31') < (b.checkin || '9999-12-31') ? -1 : 0);
+    }
     function renderLodgingDraft() {
       const curOpts = CURRENCIES.map(c => c.code).join(',');
       $('lodgingEditList').innerHTML = lodgingDraft.map((l, i) => `
@@ -2013,6 +2020,7 @@
             if (g) { l.lat = g.lat; l.lng = g.lng; l._geoName = l.name; }
           }
         }
+        sortLodgingDraft();
         const lodgings = lodgingDraft.filter(l => l.name);
         const expCol = collection(db, 'artifacts', appId, 'public', 'data', `expenses_${activeTripId}`);
         for (const ol of (tripMeta.lodgings || [])) {
