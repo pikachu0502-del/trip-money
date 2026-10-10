@@ -322,9 +322,13 @@
           <div class="flex-1 space-y-3">
             <input id="expNote" type="text" placeholder="項目名稱" class="w-full border-b-2 border-gray-100 py-1 focus:border-blue-500 outline-none text-lg bg-transparent font-bold" />
             <div class="flex gap-3 items-end">
-              <input id="expAmount" type="number" placeholder="金額" oninput="window.updateEstimate()" class="flex-1 border-b-2 border-gray-100 py-1 focus:border-blue-500 outline-none text-xl font-black bg-transparent" />
+              <div class="flex-1 min-w-0"><label class="text-[10px] text-gray-400 block font-bold">單價</label><input id="expUnitPrice" type="number" inputmode="decimal" min="0" step="any" oninput="window.calcExpAmount()" class="w-full border-b-2 border-gray-100 py-1 focus:border-blue-500 outline-none text-xl font-black bg-transparent" /></div>
+              <span class="pb-2 text-gray-400 font-black">×</span>
+              <div class="w-16 shrink-0"><label class="text-[10px] text-gray-400 block font-bold">數量</label><input id="expQty" type="number" inputmode="numeric" min="1" step="1" value="1" oninput="window.calcExpAmount()" class="w-full border-b-2 border-gray-100 py-1 focus:border-blue-500 outline-none text-xl font-black bg-transparent text-center" /></div>
               <select id="expCurrency" onchange="window.updateEstimate()" title="幣別" class="border-b-2 border-gray-100 bg-transparent text-gray-500 font-bold outline-none cursor-pointer text-sm pb-1"></select>
             </div>
+            <input id="expAmount" type="hidden" />
+            <div class="flex items-baseline justify-between text-sm font-bold"><span class="text-gray-400">小計</span><span id="expTotalLabel" class="text-gray-800 font-black">—</span></div>
           </div>
         </div>
 
@@ -1203,6 +1207,7 @@
           </div>
           <div class="text-right shrink-0">
             <div class="text-base font-black">${sym}${Math.round(amt).toLocaleString()}</div>
+            ${parseFloat(x.quantity) > 1 ? `<div class="text-[10px] font-bold text-[#627284]">${sym}${(parseFloat(x.unitPrice) || 0).toLocaleString()} × ${x.quantity}</div>` : ''}
             ${x.currency && x.currency !== 'TWD' ? `<div class="text-[10px] font-bold text-[#627284]">${esc(x.currency)} · ≈ NT$${Math.round(twd).toLocaleString()}</div>` : ''}
           </div>
         </div>`;
@@ -1435,6 +1440,9 @@
       buildExpenseSelects();
       $('expNote').value = '';
       $('expAmount').value = '';
+      $('expUnitPrice').value = '';
+      $('expQty').value = 1;
+      $('expTotalLabel').textContent = '—';
       $('expLocation').value = '';
       $('expRemarks').value = '';
       $('expCurrency').value = 'TWD';
@@ -1464,6 +1472,9 @@
       buildExpenseSelects();
       $('expNote').value = exp.note || '';
       $('expAmount').value = exp.amount ?? '';
+      { const q = parseFloat(exp.quantity) > 0 ? parseFloat(exp.quantity) : 1;
+        $('expQty').value = q;
+        $('expUnitPrice').value = exp.unitPrice != null ? exp.unitPrice : (exp.amount != null ? Math.round(exp.amount / q * 100) / 100 : ''); }
       $('expLocation').value = exp.location || '';
       $('expRemarks').value = exp.remarks || '';
       $('expCurrency').value = exp.currency || 'TWD';
@@ -1493,7 +1504,16 @@
     };
     window.setCustomAmount = (p, val) => { customAmounts[p] = parseFloat(val) || 0; };
 
+    window.calcExpAmount = () => {
+      const p = parseFloat($('expUnitPrice').value), q = parseFloat($('expQty').value);
+      const qty = isNaN(q) || q <= 0 ? 1 : q;
+      const total = isNaN(p) ? NaN : Math.round(p * qty * 100) / 100;
+      $('expAmount').value = isNaN(total) ? '' : total;
+      $('expTotalLabel').textContent = isNaN(total) ? '—' : `${curSym($('expCurrency').value)}${total.toLocaleString()}${qty !== 1 ? `（${p.toLocaleString()} × ${qty}）` : ''}`;
+      window.updateEstimate();
+    };
     window.updateEstimate = () => {
+      if ($('expTotalLabel') && $('expAmount').value !== '') { const t = parseFloat($('expAmount').value), q = parseFloat($('expQty').value) || 1; $('expTotalLabel').textContent = `${curSym($('expCurrency').value)}${t.toLocaleString()}${q !== 1 ? `（${(parseFloat($('expUnitPrice').value) || 0).toLocaleString()} × ${q}）` : ''}`; }
       const amount = parseFloat($('expAmount').value) || 0;
       const curr = $('expCurrency').value;
       const method = $('expSplitMethod').value;
@@ -1523,7 +1543,7 @@
       const note = $('expNote').value.trim();
       const amount = parseFloat($('expAmount').value);
       if (!note || isNaN(amount) || !activeTripId || participants.length === 0) {
-        alert('請填寫名稱、金額並選擇至少一位參與者');
+        alert('請填寫名稱、單價並選擇至少一位參與者');
         return;
       }
       const btn = $('saveBtn'); const loader = $('saveLoader');
@@ -1543,6 +1563,8 @@
         const col = collection(db, 'artifacts', appId, 'public', 'data', `expenses_${activeTripId}`);
         const data = {
           note, amount,
+          unitPrice: parseFloat($('expUnitPrice').value) || 0,
+          quantity: parseFloat($('expQty').value) > 0 ? parseFloat($('expQty').value) : 1,
           location: locationText,
           remarks: $('expRemarks').value.trim(),
           currency: $('expCurrency').value,
@@ -1608,8 +1630,8 @@
         const text = (result.candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/```json|```/g, '');
         const data = JSON.parse(text);
         if (data.merchant) $('expNote').value = data.merchant;
-        if (data.amount) $('expAmount').value = data.amount;
-        if (data.currency && CURRENCIES.some(c => c.code === data.currency)) $('expCurrency').value = data.currency;
+        if (data.amount) { $('expUnitPrice').value = data.amount; $('expQty').value = 1; window.calcExpAmount(); }
+        if (data.currency && CURRENCIES.some(c => c.code === data.currency)) { $('expCurrency').value = data.currency; window.calcExpAmount(); }
         if (data.category && CATEGORIES.includes(data.category)) $('expCategory').value = data.category;
         if (data.date) $('expDate').value = data.date;
         window.updateEstimate();
