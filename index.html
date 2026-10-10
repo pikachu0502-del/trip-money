@@ -338,8 +338,9 @@
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">支付方式</label><select id="expPayment" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">模式</label><select id="expSplitMethod" onchange="window.updateEstimate()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">支付人</label><select id="expPayer" onchange="window.updateEstimate()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
-          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">日期</label><input id="expDate" type="date" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">日期</label><input id="expDate" type="date" onchange="window.buildItinLinkOpts()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">行程時間 (選填)</label><input id="expScheduleTime" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" oninput="window.maskTime(this)" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+          <div class="col-span-2"><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">連結行程 (選填)</label><select id="expItinLink" onchange="window.onItinLinkChange()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select><p id="expItinLinkHint" class="text-[10px] text-gray-400 font-bold mt-1" x-hidden>已連結：這筆支出會併入該行程卡顯示，不會在時間軸重複出現</p></div>
         </div>
 
         <div>
@@ -438,6 +439,7 @@
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">停留時間（分鐘）</label><input id="itDuration" type="number" inputmode="numeric" min="0" max="1440" step="5" oninput="window.updateItinEnd()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">預計結束</label><div id="itEndHint" class="w-full border border-dashed border-gray-200 rounded-xl p-2.5 font-bold text-[#556576]">—</div></div>
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">類型</label><select id="itType" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
+          <div class="col-span-2 -mt-1"><button type="button" onclick="window.itinToMealExpense()" class="text-xs font-bold text-[#456A86] flex items-center gap-1"><i data-lucide="utensils" class="w-3.5 h-3.5"></i>要安排用餐？改由記帳新增，會自動顯示在行程 ›</button></div>
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">從上一站前往</label><select id="itTransport" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"><option value="auto">依旅程預設</option><option value="walk">步行</option><option value="transit">大眾運輸</option><option value="car">開車／計程車</option><option value="charter">包車</option></select></div>
         </div>
         <div class="relative"><i data-lucide="map-pin" class="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400"></i><input id="itLocation" type="text" placeholder="地點（用於地圖定位與導航）" class="w-full pl-9 pr-2 py-2.5 border border-gray-100 rounded-lg bg-gray-50 focus:border-blue-500 outline-none text-sm font-bold" /></div>
@@ -1393,6 +1395,34 @@
       if ($('expCurrency').options.length === 0) fillCurrencySelect($('expCurrency'), 'TWD');
     }
 
+    // ===== 行程 ↔ 記帳 連結 =====
+    window.buildItinLinkOpts = (keep) => {
+      const sel = $('expItinLink'), d = $('expDate').value;
+      const cur = keep !== undefined ? keep : sel.value;
+      const opts = itinerary.filter(i => i.date === d).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+      const linked = cur && itineraryCache[cur] && !opts.some(o => o.dbId === cur) ? [itineraryCache[cur]] : [];
+      sel.innerHTML = `<option value="">不連結</option>` + [...linked, ...opts].map(i => `<option value="${esc(i.dbId)}">${esc(i.time || '—')}　${esc(i.title || '')}${i.date !== d ? '（' + esc(i.date) + '）' : ''}</option>`).join('');
+      sel.value = cur && [...linked, ...opts].some(o => o.dbId === cur) ? cur : '';
+      window.onItinLinkChange();
+    };
+    window.onItinLinkChange = () => { $('expItinLinkHint').toggleAttribute('x-hidden', !$('expItinLink').value); };
+    window.addExpenseFromItin = (id) => {
+      const it = itineraryCache[id]; if (!it) return;
+      window.openAddExpense();
+      if (!$('addExpenseModal').classList.contains('active')) return;
+      $('expNote').value = it.title || '';
+      $('expLocation').value = it.location || '';
+      $('expDate').value = it.date || todayStr();
+      const cat = ITIN2CAT[it.type]; if (cat && CATEGORIES.includes(cat)) $('expCategory').value = cat;
+      window.buildItinLinkOpts(id);
+    };
+    function linkedSummary(list) {
+      if (!list.length) return '';
+      const curs = [...new Set(list.map(x => x.currency))];
+      if (curs.length === 1) return `${curSym(curs[0])}${Math.round(list.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0)).toLocaleString()}`;
+      return ntd(list.reduce((s, x) => s + (parseFloat(x.amount) || 0) * (rates[x.currency] || 1), 0));
+    }
+
     window.openAddExpense = () => {
       if (!activeTripId) { alert('請先建立或選擇帳本'); return; }
       if (!people.length) { alert('請先新增成員'); return; }
@@ -1414,6 +1444,7 @@
       $('expPayer').value = people[0] || '';
       $('expDate').value = new Date().toISOString().split('T')[0];
       $('expScheduleTime').value = '';
+      window.buildItinLinkOpts('');
       $('imgLabel').innerHTML = `<i data-lucide="camera" class="w-6 h-6"></i><span class="text-[10px] mt-1 font-bold">收據</span>`;
       updateParticipantsUI();
       window.updateEstimate();
@@ -1442,6 +1473,7 @@
       $('expPayer').value = exp.payer || (people[0] || '');
       $('expDate').value = exp.date || new Date().toISOString().split('T')[0];
       $('expScheduleTime').value = exp.scheduleTime || '';
+      window.buildItinLinkOpts(exp.itinId || '');
       $('imgLabel').innerHTML = previewUrl ? `<img src="${previewUrl}" alt="收據" class="w-full h-full object-cover" />` : `<i data-lucide="camera" class="w-6 h-6"></i><span class="text-[10px] mt-1 font-bold">收據</span>`;
       updateParticipantsUI();
       window.updateEstimate();
@@ -1518,6 +1550,7 @@
           paymentMethod: $('expPayment').value,
           date: $('expDate').value,
           scheduleTime: $('expScheduleTime').value.trim(),
+          itinId: $('expItinLink').value || null,
           splitMethod: $('expSplitMethod').value,
           payer: $('expPayer').value,
           participants: [...participants],
@@ -1872,8 +1905,9 @@
     };
     const hhmm = (m) => `${String(Math.floor(((m % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(((m % 60) + 60) % 60).padStart(2, '0')}`;
     function itinDayItems(date) {
-      const a = itinerary.filter(i => i.date === date).map(i => ({ ...i, _spend: false }));
-      const b = expenses.filter(e => e.scheduleTime && e.date === date).map(e => ({ _spend: true, dbId: e.dbId, time: e.scheduleTime, title: e.note, amount: e.amount, currency: e.currency, location: e.location, category: e.category, lat: e.lat, lng: e.lng, transport: e.transport }));
+      const isLinked = (e) => e.itinId && itineraryCache[e.itinId];
+      const a = itinerary.filter(i => i.date === date).map(i => ({ ...i, _spend: false, _linked: expenses.filter(e => e.itinId === i.dbId) }));
+      const b = expenses.filter(e => e.scheduleTime && e.date === date && !isLinked(e)).map(e => ({ _spend: true, dbId: e.dbId, time: e.scheduleTime, title: e.note, amount: e.amount, currency: e.currency, location: e.location, category: e.category, lat: e.lat, lng: e.lng, transport: e.transport }));
       const k = (x) => { const m = toMinOfDay(x.time); return m == null ? 99999 : m; };
       const c = uniqueFlights().filter(f => f.date === date).map(f => {
         const d0 = toMinOfDay(f.depTime), a0 = toMinOfDay(f.arrTime);
@@ -1967,8 +2001,8 @@
         if (it._flight) {
           icon = 'plane'; color = '#3F8A9E'; click = `window.editFlight('${it.dbId}')`; sub = esc(it.sub);
         } else if (it._spend) {
-          icon = 'receipt'; color = '#3F8A9E'; click = `window.editExpense('${it.dbId}')`;
-          sub = ['消費', `${esc(it.currency)} ${Math.round(it.amount).toLocaleString()}`, esc(it.location || '')].filter(Boolean).join(' · ');
+          icon = CAT_ICON[it.category] || 'receipt'; color = CAT_COLOR[it.category] || '#3F8A9E'; click = `window.editExpense('${it.dbId}')`;
+          sub = [esc(it.category || '消費'), `${curSym(it.currency)}${Math.round(it.amount).toLocaleString()}`, esc(it.location || '')].filter(Boolean).join(' · ');
         } else {
           const ty = ITIN_TYPES[it.type] || ITIN_TYPES['其他'];
           icon = ty.icon; color = ty.color; click = `window.editItin('${it.dbId}')`;
@@ -1983,6 +2017,9 @@
             <div class="flex items-center gap-2"><i data-lucide="${icon}" class="w-4 h-4 shrink-0" style="color:${color}"></i><span class="font-black text-[#293C4E] truncate">${esc(it.title || '未命名')}</span></div>
             ${sub ? `<div class="text-xs font-bold text-[#556576] mt-1 truncate">${sub}</div>` : ''}
             ${it.note ? `<div class="text-[11px] font-bold text-[#556576] mt-1 line-clamp-2">${esc(it.note)}</div>` : ''}
+            ${!it._spend && !it._flight ? (it._linked && it._linked.length
+              ? `<button onclick="event.stopPropagation();window.editExpense('${it._linked[0].dbId}')" class="mt-2 flex items-center gap-1.5 text-xs font-bold text-[#26685E]"><i data-lucide="receipt" class="w-3.5 h-3.5"></i>實際支出 ${linkedSummary(it._linked)}${it._linked.length > 1 ? ` · ${it._linked.length} 筆` : ''}</button>`
+              : `<button onclick="event.stopPropagation();window.addExpenseFromItin('${it.dbId}')" class="mt-2 flex items-center gap-1 text-xs font-bold text-[#456A86]"><i data-lucide="plus" class="w-3.5 h-3.5"></i>記一筆</button>`) : ''}
             ${warn ? `<div class="mt-2 px-2.5 py-1 rounded-lg bg-[#F8EEDF] text-[#8E5F22] text-[11px] font-bold flex items-center gap-1"><i data-lucide="alert-circle" class="w-3 h-3 shrink-0"></i>${warn}</div>` : ''}
           </div>
         </div>`;
@@ -2000,9 +2037,22 @@
       fillTravelLegs();
     }
 
-    function buildItinTypeSelect() {
-      $('itType').innerHTML = Object.keys(ITIN_TYPES).map(k => `<option value="${k}">${k}</option>`).join('');
+    // 用餐改由記帳建立；舊的「餐廳」行程仍可編輯
+    function buildItinTypeSelect(current) {
+      $('itType').innerHTML = Object.keys(ITIN_TYPES).filter(k => k !== '餐廳' || current === '餐廳').map(k => `<option value="${k}">${k}</option>`).join('');
     }
+    window.itinToMealExpense = () => {
+      const d = $('itDate').value, t = $('itTime').value, title = $('itTitle').value.trim(), loc = $('itLocation').value.trim();
+      window.closeModal('addItinModal');
+      window.openAddExpense();
+      if (!$('addExpenseModal').classList.contains('active')) return;
+      if (title) $('expNote').value = title;
+      if (loc) $('expLocation').value = loc;
+      if (d) $('expDate').value = d;
+      $('expScheduleTime').value = t || '';
+      if (CATEGORIES.includes('餐飲')) $('expCategory').value = '餐飲';
+      window.buildItinLinkOpts('');
+    };
     window.openAddItin = () => {
       if (!activeTripId) { alert('請先選擇帳本'); return; }
       editingItinId = null;
@@ -2024,10 +2074,11 @@
     window.editItin = (id) => {
       const it = itineraryCache[id]; if (!it) return;
       editingItinId = id;
+      const _cur = (itineraryCache[id] || {}).type;
       $('itinModalTitle').innerText = '編輯行程';
       $('itinDeleteBtn').removeAttribute('x-hidden');
       $('itinCopyBtn').removeAttribute('x-hidden');
-      buildItinTypeSelect();
+      buildItinTypeSelect(_cur);
       $('itTitle').value = it.title || '';
       $('itDate').value = it.date || todayStr();
       $('itTime').value = it.time || '';
