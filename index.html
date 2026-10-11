@@ -1961,7 +1961,7 @@
     }
     function refreshItinCheck() { const el = $('itinCheck'); if (el && selectedItinDate) { el.innerHTML = checkCard(itinDayItems(selectedItinDate)); icons(); } }
     function travelLeg(prev, cur) {
-      if (!hasGeo(prev) || !hasGeo(cur)) return (prev.location && cur.location) ? `<div class="flex items-center gap-1.5 pl-[4.25rem] py-2 text-[11px] font-bold text-[#556576]"><i data-lucide="route" class="w-3.5 h-3.5"></i>交通時間待確認</div>` : '';
+      if (!hasGeo(prev) || !hasGeo(cur)) return (prev.location && cur.location) ? `<div class="leg-plain flex items-center gap-1.5 pl-[4.25rem] py-2 text-[11px] font-bold text-[#556576]"><i data-lucide="route" class="w-3.5 h-3.5"></i>交通時間待確認</div>` : '';
       const { km0, mode, key, hit, min, km, gap } = legData(prev, cur);
       if (km0 < 0.03) return '';
       const warn = legWarn(gap, min);
@@ -2017,7 +2017,52 @@
 
     let selectedItinDate = null;
     let itinDates = [];
-    let itinView = 'timeline', itinMap = null, itinMarkers = [];
+    let itinView = 'timeline', itinMap = null, itinMarkers = [], curDayItems = [];
+    window.itinDragStart = (ev, idx) => {
+      ev.preventDefault(); ev.stopPropagation();
+      const rowsArr = [...document.querySelectorAll('#itineraryList .itin-row')];
+      const from = rowsArr.findIndex(r => +r.dataset.idx === idx);
+      if (from < 0) return;
+      const el = rowsArr[from], rects = rowsArr.map(r => r.getBoundingClientRect()), H = rects[from].height + 8, y0 = ev.clientY;
+      let to = from;
+      const fade = document.querySelectorAll('#itineraryList .travel-leg, #itineraryList .leg-plain');
+      fade.forEach(n => { n.style.transition = 'opacity .15s'; n.style.opacity = '.2'; });
+      rowsArr.forEach(r => { r.style.transition = 'transform .15s'; r.style.position = 'relative'; });
+      Object.assign(el.style, { transition: 'none', zIndex: 30 });
+      el.querySelector('.cursor-pointer').style.boxShadow = '0 10px 24px rgba(41,60,78,.18)';
+      const move = (e) => {
+        const dy = e.clientY - y0, c = rects[from].top + rects[from].height / 2 + dy;
+        el.style.transform = `translateY(${dy}px) scale(1.02)`;
+        to = 0;
+        rects.forEach((r, i) => { if (i !== from && r.top + r.height / 2 < c) to++; });
+        rowsArr.forEach((r, i) => { if (i === from) return; r.style.transform = (from < i && i <= to) ? `translateY(${-H}px)` : (to <= i && i < from) ? `translateY(${H}px)` : ''; });
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+        if (to === from) { rowsArr.forEach(r => { r.style.transform = ''; r.style.zIndex = ''; }); el.querySelector('.cursor-pointer').style.boxShadow = ''; fade.forEach(n => n.style.opacity = ''); return; }
+        const order = rowsArr.map(r => +r.dataset.idx);
+        const [m] = order.splice(from, 1); order.splice(to, 0, m);
+        applyItinOrder(order);
+      };
+      window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+    };
+    // 依新順序重新分配當天既有的開始時間（航班時間固定不動）
+    async function applyItinOrder(order) {
+      const items = curDayItems;
+      const mov = order.filter(i => items[i] && !items[i]._flight && toMinOfDay(items[i].time) != null);
+      const slots = mov.map(i => items[i].time).sort((a, b) => toMinOfDay(a) - toMinOfDay(b));
+      const changes = [];
+      mov.forEach((i, k) => { if (items[i].time !== slots[k]) changes.push({ it: items[i], time: slots[k] }); });
+      changes.forEach(({ it, time }) => {
+        if (it._spend) { const e = expenses.find(x => x.dbId === it.dbId); if (e) e.scheduleTime = time; }
+        else { const r = itinerary.find(x => x.dbId === it.dbId); if (r) r.time = time; }
+      });
+      renderItinerary();
+      const tripId = activeTripId; if (!isAuthed || !tripId || !changes.length) return;
+      try {
+        await Promise.all(changes.map(({ it, time }) => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', `${it._spend ? 'expenses' : 'itinerary'}_${tripId}`, it.dbId), it._spend ? { scheduleTime: time } : { time })));
+      } catch (e) { console.error(e); alert('順序儲存失敗，請稍後再試'); }
+    }
     window.setItinView = (v) => { itinView = v; renderItinerary(); };
     window.focusStop = (i) => {
       const m = itinMarkers[i];
@@ -2188,13 +2233,13 @@
             ${hasGeo(it) ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${it.lat},${it.lng}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#E3EBF2] text-[#3D6280] text-[11px] font-black"><i data-lucide="navigation" class="w-3 h-3"></i>導航</a>` : ''}
           </div>
         </div>`;
-        return leg + `<div class="flex gap-3">
+        return leg + `<div class="flex gap-3 itin-row" data-idx="${idx}">
           <div class="w-14 shrink-0 pt-3.5">
             <div class="text-sm font-black text-[#293C4E]">${esc(it.time || '—')}</div>
             ${+it.duration ? `<div class="text-[11px] font-bold text-[#556576]">${fmtMin(+it.duration)}</div>` : ''}
           </div>
           <div onclick="${click}" class="flex-1 min-w-0 bg-white border border-[#DFE3E8] rounded-2xl p-3.5 shadow-[0_1px_2px_rgba(41,60,78,.04)] hover:border-[#BCCFDD] cursor-pointer transition-colors">
-            <div class="flex items-center gap-2"><i data-lucide="${icon}" class="w-4 h-4 shrink-0" style="color:${color}"></i><span class="font-black text-[#293C4E] truncate">${esc(it.title || '未命名')}</span></div>
+            <div class="flex items-center gap-2"><i data-lucide="${icon}" class="w-4 h-4 shrink-0" style="color:${color}"></i><span class="font-black text-[#293C4E] truncate">${esc(it.title || '未命名')}</span>${!it._flight && st != null ? `<button onpointerdown="window.itinDragStart(event, ${idx})" onclick="event.stopPropagation()" title="拖曳調整順序" class="ml-auto -mr-1.5 -my-1.5 w-9 h-9 shrink-0 flex items-center justify-center rounded-lg text-[#8A97A5] hover:bg-[#EEF1F4] cursor-grab active:cursor-grabbing" style="touch-action:none"><i data-lucide="grip-vertical" class="w-4 h-4"></i></button>` : ''}</div>
             ${sub ? `<div class="text-xs font-bold text-[#556576] mt-1 truncate">${sub}</div>` : ''}
             ${it.note ? `<div class="text-[11px] font-bold text-[#556576] mt-1 line-clamp-2">${esc(it.note)}</div>` : ''}
             ${!it._spend && !it._flight ? (it._linked && it._linked.length
@@ -2206,6 +2251,7 @@
       }).join('');
 
       const geoN = items.filter(hasGeo).length, navAll = dayNavUrl(items);
+      curDayItems = items;
       const seg = (v, ic, l) => `<button onclick="window.setItinView('${v}')" class="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-black transition-colors ${itinView === v ? 'bg-white text-[#293C4E] shadow-sm' : 'text-[#556576] hover:text-[#293C4E]'}"><i data-lucide="${ic}" class="w-3.5 h-3.5"></i>${l}</button>`;
       $('itineraryList').innerHTML = `<div class="space-y-3">
         <div class="flex items-center justify-between gap-2 px-1">
@@ -2213,6 +2259,7 @@
           <div class="shrink-0 flex p-0.5 rounded-xl bg-[#E2E6EB]">${seg('timeline', 'list', '時間軸')}${seg('map', 'map', '地圖')}</div>
         </div>
         <div id="itinCheck">${checkCard(items)}</div>
+        ${!isMap && items.length > 1 ? `<p class="px-1 text-[11px] font-bold text-[#556576] flex items-center gap-1"><i data-lucide="grip-vertical" class="w-3 h-3"></i>拖曳右側把手調整順序，開始時間會依新順序互換；航班時間固定</p>` : ''}
         ${isMap && items.length ? `<div id="itinMapBox" class="bg-white rounded-2xl border border-[#DFE3E8] overflow-hidden">
           ${geoN ? `<div id="itinMapView" style="height:320px;isolation:isolate"></div>` : `<div class="py-10 px-6 text-center text-sm font-bold text-[#556576]"><i data-lucide="map-pin-off" class="w-8 h-8 mx-auto mb-2 text-[#B7C1CC]"></i>當日行程都還沒有定位<br/>編輯行程並填入地點後即可顯示於地圖</div>`}
           <div class="flex items-center gap-2 px-3 py-2.5 border-t border-[#DFE3E8] text-[11px] font-bold text-[#556576]">
