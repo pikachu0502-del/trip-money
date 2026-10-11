@@ -70,24 +70,28 @@
 <body class="bg-[#EDEFF2] text-[#293C4E] font-bold min-h-screen">
 
   <div id="mainApp" class="max-w-[480px] mx-auto px-4 pt-2 pb-28" x-hidden>
-    <!-- Header (sticky) -->
-    <div class="sticky top-0 z-30 -mx-4 px-4 py-2.5 bg-[#EDEFF2]/90 backdrop-blur mb-4 flex justify-center">
-      <button onclick="window.openModal('tripModal')" title="更換帳本" class="flex items-center gap-2 text-[#527C9B] hover:bg-blue-50 px-4 py-2 rounded-full border border-blue-100 transition-all bg-white shadow-sm">
-        <i data-lucide="folder-open" class="w-4 h-4"></i>
-        <span id="currentTripName" class="text-sm leading-none">載入中...</span>
-        <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-blue-300"></i>
+    <!-- App bar：帳本切換 -->
+    <div id="appBar" class="sticky top-0 z-30 -mx-4 px-4 h-14 mb-3 flex items-center justify-between gap-3 bg-[#EDEFF2]/85 backdrop-blur border-b border-transparent transition-colors">
+      <button onclick="window.openModal('tripModal')" title="切換帳本" class="flex items-center gap-2.5 min-w-0 -ml-1.5 pl-1.5 pr-2.5 py-1.5 rounded-xl hover:bg-white/70 active:bg-white transition-colors">
+        <span id="tripAvatar" class="w-8 h-8 shrink-0 rounded-lg bg-[#527C9B] text-white text-sm font-black flex items-center justify-center">·</span>
+        <span class="min-w-0 text-left leading-tight">
+          <span class="block text-[10px] font-bold text-[#556576]">目前帳本</span>
+          <span class="flex items-center gap-1 min-w-0"><span id="currentTripName" class="text-[15px] font-black text-[#293C4E] truncate max-w-[13rem]">載入中...</span><i data-lucide="chevron-down" class="w-4 h-4 shrink-0 text-[#556576]"></i></span>
+        </span>
       </button>
+      <span class="shrink-0 text-[10px] font-black tracking-[0.2em] text-[#556576]">TRIP MONEY</span>
     </div>
 
     <!-- 首頁目次 -->
     <div id="pageHome" x-hidden class="space-y-4 text-[#293C4E]">
       <div class="flex items-start justify-between gap-3 px-1">
         <div class="min-w-0">
-          <div class="text-[10px] font-bold tracking-wider text-[#556576]">TRIP MONEY / MY TRAVEL</div>
+          <div class="text-[10px] font-bold tracking-wider text-[#556576]">MY TRAVEL</div>
           <div id="homeDest" class="text-2xl font-black truncate">—</div>
           <div id="homeDates" class="text-xs font-bold text-[#556576] mt-0.5">—</div>
         </div>
-        <button onclick="window.openTripSettings()" title="旅程設定" class="shrink-0 w-11 h-11 rounded-full bg-white shadow-[0_1px_3px_rgba(41,60,78,.08)] flex items-center justify-center text-[#527C9B] hover:bg-[#E3EBF2]"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i></button>
+        <div class="flex gap-2 shrink-0"><button onclick="window.openBackup()" title="資料備份" class="w-11 h-11 rounded-full bg-white shadow-[0_1px_3px_rgba(41,60,78,.08)] flex items-center justify-center text-[#527C9B] hover:bg-[#E3EBF2]"><i data-lucide="shield-check" class="w-4 h-4"></i></button>
+        <button onclick="window.openTripSettings()" title="旅程設定" class="shrink-0 w-11 h-11 rounded-full bg-white shadow-[0_1px_3px_rgba(41,60,78,.08)] flex items-center justify-center text-[#527C9B] hover:bg-[#E3EBF2]"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i></button></div>
       </div>
       <div class="bg-white rounded-[20px] shadow-[0_1px_3px_rgba(41,60,78,.06)] p-5">
         <div class="flex items-start justify-between gap-3 pb-4 border-b border-[#E3E7EC]">
@@ -111,8 +115,9 @@
 
     <div id="tripContent" x-hidden class="space-y-5 text-[#293C4E]">
       <div class="bg-white rounded-[20px] shadow-[0_1px_3px_rgba(41,60,78,.06)] p-5 space-y-4">
-        <div>
-          <div class="text-xs font-bold text-[#556576]">旅行總支出</div>
+        <div class="relative pr-20">
+          <button onclick="window.openBackup()" title="資料備份與還原" class="absolute right-0 top-0 h-10 px-3 rounded-full bg-[#E3EBF2] text-[#456A86] flex items-center gap-1 text-xs font-black hover:bg-[#D7E3EC]"><i data-lucide="shield-check" class="w-4 h-4"></i>備份</button>
+          <div class="text-xs font-bold text-[#556576]">總支出</div>
           <div id="recTotal" class="text-[32px] leading-tight font-black tracking-tight mt-1">NT$ 0</div>
           <div id="recTotalSub" class="text-[11px] font-bold text-[#556576] mt-0.5"></div>
         </div>
@@ -137,6 +142,7 @@
             <button onclick="window.addPerson()" title="新增成員" class="w-10 rounded-xl border border-[#DFE3E8] text-[#527C9B] hover:bg-[#E3EBF2] flex items-center justify-center"><i data-lucide="plus" class="w-4 h-4"></i></button>
           </div>
           <button onclick="window.openModal('ratesModal')" class="text-xs font-bold text-[#527C9B] flex items-center gap-1"><i data-lucide="settings-2" class="w-3.5 h-3.5"></i>匯率管理（總額換算依此匯率）</button>
+          <button onclick="window.openBackup()" class="text-xs font-bold text-[#456A86] flex items-center gap-1"><i data-lucide="shield-check" class="w-3.5 h-3.5"></i>資料備份與還原</button>
         </div>
       </div>
       <div class="flex items-center justify-between px-1">
@@ -427,6 +433,37 @@
     </div>
   </div>
 
+  <!-- 資料備份 Modal -->
+  <div id="backupModal" class="modal !items-start sm:!items-center overflow-y-auto">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl my-4 overflow-hidden flex flex-col max-h-[94vh]">
+      <div class="p-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
+        <h2 class="text-base font-black text-gray-800 flex items-center gap-2"><i data-lucide="shield-check" class="w-5 h-5 text-[#527C9B]"></i>資料備份與還原</h2>
+        <button onclick="window.closeModal('backupModal')" title="關閉"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-5 space-y-6 overflow-y-auto relative">
+        <div id="backupLoader" class="loading-overlay"><i data-lucide="loader-2" class="w-8 h-8 animate-spin text-blue-500"></i></div>
+        <div id="backupSummary" class="rounded-xl bg-gray-50 p-3 text-sm font-bold text-gray-600"></div>
+        <section class="space-y-2">
+          <h3 class="text-sm font-black text-gray-800">1. 匯出備份</h3>
+          <button onclick="window.exportBackupJSON()" class="w-full py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-colors bg-[#527C9B] text-white hover:bg-[#456A86]"><i data-lucide="download" class="w-4 h-4"></i>匯出完整備份檔</button>
+          <p class="text-[11px] text-gray-500 font-bold">含支出、收據圖片、行程、航班、住宿、清單，可完整還原。手機上會開啟分享選單，可存到「檔案」、Google 雲端或傳給自己。</p>
+          <button onclick="window.exportExpensesCSV()" class="w-full py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-colors bg-white border border-gray-200 text-[#456A86] hover:bg-gray-50"><i data-lucide="table" class="w-4 h-4"></i>匯出支出表格（Excel / CSV）</button>
+          <p class="text-[11px] text-gray-500 font-bold">方便用試算表檢視，但不能拿來還原。</p>
+        </section>
+        <section class="space-y-2">
+          <h3 class="text-sm font-black text-gray-800">2. 從備份檔還原</h3>
+          <label class="w-full py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-colors bg-white border border-dashed border-gray-300 text-[#456A86] hover:bg-gray-50 cursor-pointer"><i data-lucide="upload" class="w-4 h-4"></i>選擇備份檔（.json）<input id="backupFile" type="file" accept=".json,application/json" onchange="window.readBackupFile(this)" class="hidden" /></label>
+          <div id="backupPreview" x-hidden class="rounded-xl border border-gray-200 p-3 space-y-3"></div>
+        </section>
+        <section class="space-y-2">
+          <h3 class="text-sm font-black text-gray-800">3. 這支手機的自動備份</h3>
+          <p class="text-[11px] text-gray-500 font-bold">資料有變動時，會自動在這支手機保留最近幾份備份。清除瀏覽器資料或換手機就會消失，請定期用上方「匯出完整備份檔」另外保存。</p>
+          <div id="autoSnapList" class="space-y-2"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <!-- 新增/編輯行程 Modal -->
   <div id="addItinModal" class="modal !items-start sm:!items-center overflow-y-auto">
     <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl my-4 overflow-hidden flex flex-col max-h-[94vh]">
@@ -510,7 +547,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-    import { getFirestore, doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore, doc, collection, onSnapshot, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyDwhrvO9igpNTDPkGZeZ8ocYDrNnVENk8o",
@@ -656,11 +693,13 @@
       $('tripModalHint').style.display = hasTrip ? 'none' : '';
     }
 
+    window.addEventListener('scroll', () => { const b = $('appBar'); if (b) b.classList.toggle('border-[#DFE3E8]', window.scrollY > 4); }, { passive: true });
     window.switchTrip = (id) => {
       if (!isAuthed) return;
       activeTripId = id;
       const trip = trips.find(t => t.id === id);
       $('currentTripName').innerText = trip ? trip.name : '未選取帳本';
+      $('tripAvatar').textContent = trip && trip.name ? [...trip.name.trim()][0] || '·' : '·';
       // 進入帳本內部頁面
       $('mainApp').removeAttribute('x-hidden');
       updateTripModalChrome();
@@ -743,6 +782,7 @@
     };
 
     window.refreshUI = () => {
+      scheduleAutoSnap();
       renderExpenses();
       renderSummary();
       renderSettlement();
@@ -1664,6 +1704,7 @@
       return [...set].sort();
     }
     function renderHome() {
+      scheduleAutoSnap();
       const trip = trips.find(t => t.id === activeTripId);
       const s = tripMeta.startDate, e = tripMeta.endDate, t = todayStr();
       const md = (d) => { const o = dObj(d); return `${o.getMonth() + 1}/${o.getDate()}`; };
@@ -2455,6 +2496,194 @@
       } catch (err) { console.warn('住宿補定位中斷', err); }
       finally { lodgeBackfilling = false; }
     }
+
+    // ===== 資料備份與還原 =====
+    const BK_COLS = ['expenses', 'flights', 'itinerary', 'lists'];
+    const bkClean = (v) => v && typeof v.toDate === 'function' ? { __ts: v.toDate().getTime() }
+      : Array.isArray(v) ? v.map(bkClean)
+      : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'dbId').map(([k, x]) => [k, bkClean(x)])) : v;
+    const bkRestore = (v) => v && typeof v === 'object' && !Array.isArray(v) && '__ts' in v ? new Date(v.__ts)
+      : Array.isArray(v) ? v.map(bkRestore)
+      : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, bkRestore(x)])) : v;
+    function buildBackup() {
+      const trip = trips.find(t => t.id === activeTripId) || {};
+      const pack = (arr) => arr.map(x => ({ id: x.dbId, data: bkClean(x) }));
+      return {
+        app: 'trip-money', version: 1, exportedAt: new Date().toISOString(),
+        trip: { id: activeTripId, name: trip.name || '', mode: trip.mode || tripMeta.mode || 'travel' },
+        settings: bkClean({ people, rates, meta: tripMeta }),
+        expenses: pack(expenses), flights: pack(flights), itinerary: pack(itinerary), lists: pack(lists)
+      };
+    }
+    const bkCounts = (b) => `支出 ${(b.expenses || []).length}・行程 ${(b.itinerary || []).length}・航班 ${(b.flights || []).length}・清單 ${(b.lists || []).length}`;
+    const bkStamp = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; };
+    const bkSafeName = (s) => (s || '帳本').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40);
+    async function shareOrDownload(blob, filename) {
+      try {
+        const file = new File([blob], filename, { type: blob.type });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: filename }); return true; }
+      } catch (err) { if (err && err.name === 'AbortError') return false; }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+      return true;
+    }
+    function bkLastText() {
+      const t = +localStorage.getItem('tm_last_export_' + activeTripId);
+      if (!t) return '尚未匯出過備份';
+      const d = Math.floor((Date.now() - t) / 86400000);
+      return '上次匯出：' + (d <= 0 ? '今天' : d + ' 天前');
+    }
+    function renderBackupSummary() {
+      const trip = trips.find(t => t.id === activeTripId) || {};
+      $('backupSummary').innerHTML = `<div class="text-gray-800 font-black">${esc(trip.name || '目前帳本')}</div><div class="text-xs mt-0.5">${bkCounts(buildBackup())}</div><div class="text-xs mt-0.5 text-[#456A86]">${bkLastText()}</div>`;
+    }
+    window.openBackup = () => {
+      if (!activeTripId) { alert('請先選擇帳本'); return; }
+      renderBackupSummary();
+      $('backupPreview').setAttribute('x-hidden', ''); $('backupFile').value = '';
+      renderAutoSnaps();
+      window.openModal('backupModal');
+    };
+    window.exportBackupJSON = async (data, label) => {
+      const b = data || buildBackup();
+      const blob = new Blob([JSON.stringify(b)], { type: 'application/json' });
+      const ok = await shareOrDownload(blob, `TripMoney_${bkSafeName(b.trip && b.trip.name)}_${label || bkStamp()}.json`);
+      if (ok && !data) { localStorage.setItem('tm_last_export_' + activeTripId, Date.now()); renderBackupSummary(); }
+    };
+    window.exportExpensesCSV = async () => {
+      const head = ['日期', '行程時間', '項目', '分類', '單價', '數量', '金額', '幣別', '約台幣', '支付人', '分攤方式', '參與者', '付款方式', '地點', '備註'];
+      const q = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+      const rows = [...expenses].sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(x => [
+        x.date, x.scheduleTime, x.note, x.category, x.unitPrice ?? x.amount, x.quantity ?? 1, x.amount, x.currency,
+        Math.round((parseFloat(x.amount) || 0) * (rates[x.currency] || 1)), x.payer, x.splitMethod, (x.participants || []).join('、'), x.paymentMethod, x.location, x.remarks
+      ].map(q).join(','));
+      const blob = new Blob(['\uFEFF' + [head.join(','), ...rows].join('\r\n')], { type: 'text/csv;charset=utf-8' });
+      const trip = trips.find(t => t.id === activeTripId) || {};
+      await shareOrDownload(blob, `TripMoney_${bkSafeName(trip.name)}_支出_${bkStamp()}.csv`);
+    };
+    let pendingBackup = null;
+    window.readBackupFile = async (input) => {
+      const f = input.files && input.files[0]; if (!f) return;
+      try {
+        const b = JSON.parse(await f.text());
+        if (b.app !== 'trip-money' || !b.settings) throw new Error('format');
+        showBackupPreview(b);
+      } catch (err) { alert('這不是 Trip Money 的備份檔，或檔案已損壞'); input.value = ''; }
+    };
+    function showBackupPreview(b) {
+      pendingBackup = b;
+      const el = $('backupPreview');
+      el.innerHTML = `<div><div class="font-black text-gray-800">${esc((b.trip && b.trip.name) || '未命名帳本')}</div>
+          <div class="text-xs font-bold text-gray-500 mt-0.5">備份時間：${esc(new Date(b.exportedAt).toLocaleString('zh-TW'))}</div>
+          <div class="text-xs font-bold text-gray-500">${bkCounts(b)}</div></div>
+        <button onclick="window.restoreBackup('new')" class="w-full py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-colors bg-[#527C9B] text-white hover:bg-[#456A86]"><i data-lucide="folder-plus" class="w-4 h-4"></i>還原成新帳本（最安全）</button>
+        <button onclick="window.restoreBackup('merge')" class="w-full py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-colors bg-white border border-gray-200 text-[#456A86] hover:bg-gray-50"><i data-lucide="git-merge" class="w-4 h-4"></i>補回到目前帳本</button>
+        <p class="text-[11px] text-gray-500 font-bold">「補回」只會加回目前帳本缺少的項目，不會覆蓋或刪除任何現有資料。</p>`;
+      el.removeAttribute('x-hidden');
+      icons();
+    }
+    window.restoreBackup = async (mode) => {
+      const b = pendingBackup; if (!b || !isAuthed) return;
+      const base = ['artifacts', appId, 'public', 'data'];
+      const curTrip = activeTripId;
+      if (mode === 'merge' && !curTrip) return;
+      const msg = mode === 'new' ? `將建立新帳本「${(b.trip && b.trip.name) || '未命名'}（還原）」，原有帳本不受影響。確定？` : '將把備份中「目前帳本沒有的項目」加回來，不會覆蓋現有資料。確定？';
+      if (!confirm(msg)) return;
+      $('backupLoader').classList.add('active');
+      try {
+        let tripId = curTrip;
+        const caches = { expenses: expensesCache, flights: flightsCache, itinerary: itineraryCache, lists: Object.fromEntries(lists.map(l => [l.dbId, l])) };
+        if (mode === 'new') {
+          const ref = await addDoc(collection(db, ...base, 'trips_list'), { name: `${(b.trip && b.trip.name) || '未命名'}（還原）`, mode: (b.trip && b.trip.mode) || 'travel', created_at: Date.now() });
+          tripId = ref.id;
+          await setDoc(doc(db, ...base, 'trip_settings', tripId), bkRestore(b.settings));
+        } else {
+          const merged = [...new Set([...people, ...((b.settings && b.settings.people) || [])])];
+          if (merged.length !== people.length) await setDoc(doc(db, ...base, 'trip_settings', tripId), { people: merged }, { merge: true });
+        }
+        const ops = [];
+        BK_COLS.forEach(c => (b[c] || []).forEach(d => { if (mode === 'new' || !caches[c][d.id]) ops.push([c, d]); }));
+        for (let i = 0; i < ops.length; i += 400) {
+          const batch = writeBatch(db);
+          ops.slice(i, i + 400).forEach(([c, d]) => batch.set(doc(db, ...base, `${c}_${tripId}`, d.id), bkRestore(d.data)));
+          await batch.commit();
+        }
+        $('backupLoader').classList.remove('active');
+        alert(mode === 'new' ? `已還原為新帳本，共 ${ops.length} 筆項目` : (ops.length ? `已補回 ${ops.length} 筆項目` : '目前帳本已包含備份中的所有項目，沒有需要補回的資料'));
+        window.closeModal('backupModal');
+        if (mode === 'new') window.switchTrip(tripId);
+      } catch (err) {
+        console.error('還原失敗', err);
+        $('backupLoader').classList.remove('active');
+        alert('還原失敗，請確認網路與權限。已寫入的部分不會影響原有帳本。');
+      }
+    };
+    // --- 手機端自動備份（IndexedDB）---
+    const SNAP_KEEP = 6;
+    function snapDB() {
+      return new Promise((res, rej) => {
+        const r = indexedDB.open('tripmoney_backup', 1);
+        r.onupgradeneeded = () => { const s = r.result.createObjectStore('snaps', { keyPath: 'key' }); s.createIndex('tripId', 'tripId'); };
+        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+      });
+    }
+    async function snapList(tripId) {
+      const dbi = await snapDB();
+      return new Promise((res) => {
+        const out = [], req = dbi.transaction('snaps').objectStore('snaps').index('tripId').openCursor(IDBKeyRange.only(tripId));
+        req.onsuccess = () => { const c = req.result; if (c) { out.push(c.value); c.continue(); } else res(out.sort((a, b) => b.ts - a.ts)); };
+        req.onerror = () => res([]);
+      });
+    }
+    async function snapPut(rec, removeKeys) {
+      const dbi = await snapDB();
+      return new Promise((res) => {
+        const tx = dbi.transaction('snaps', 'readwrite'), st = tx.objectStore('snaps');
+        if (rec) st.put(rec);
+        (removeKeys || []).forEach(k => st.delete(k));
+        tx.oncomplete = () => res(true); tx.onerror = () => res(false);
+      });
+    }
+    let snapTimer = null;
+    function scheduleAutoSnap() {
+      if (!activeTripId || !window.indexedDB) return;
+      clearTimeout(snapTimer);
+      const tripId = activeTripId;
+      snapTimer = setTimeout(async () => {
+        if (tripId !== activeTripId) return;
+        try {
+          const b = buildBackup();
+          const sig = bkCounts(b) + '|' + expenses.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0).toFixed(2);
+          const list = await snapList(tripId);
+          const last = list[0];
+          if (last && last.sig === sig && Date.now() - last.ts < 6 * 3600 * 1000) return;
+          // 10 分鐘內的連續變動只更新最新一份，避免把較舊的好版本擠掉
+          const replaceLast = last && list.length > 1 && Date.now() - last.ts < 10 * 60 * 1000;
+          const rest = replaceLast ? list.slice(1) : list;
+          const rec = { key: tripId + '|' + Date.now(), tripId, ts: Date.now(), sig, counts: bkCounts(b), data: b };
+          const drop = [...(replaceLast ? [last.key] : []), ...rest.slice(SNAP_KEEP - 1).map(x => x.key)];
+          await snapPut(rec, drop);
+        } catch (err) { console.warn('自動備份失敗', err); }
+      }, 15000);
+    }
+    async function renderAutoSnaps() {
+      const box = $('autoSnapList');
+      if (!window.indexedDB) { box.innerHTML = '<div class="text-xs text-gray-500 font-bold">此瀏覽器不支援自動備份</div>'; return; }
+      const list = await snapList(activeTripId);
+      box.innerHTML = list.length ? list.map(s => `<div class="flex items-center gap-2 rounded-xl border border-gray-200 p-2.5">
+          <div class="flex-1 min-w-0"><div class="text-sm font-black text-gray-800">${new Date(s.ts).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}</div><div class="text-[11px] font-bold text-gray-500 truncate">${esc(s.counts)}</div></div>
+          <button onclick="window.useAutoSnap('${esc(s.key)}','restore')" class="px-3 py-1.5 rounded-lg text-xs font-black bg-[#E3EBF2] text-[#456A86]">還原</button>
+          <button onclick="window.useAutoSnap('${esc(s.key)}','export')" title="匯出這份" class="px-2 py-1.5 rounded-lg text-xs font-black border border-gray-200 text-[#456A86]"><i data-lucide="download" class="w-3.5 h-3.5"></i></button>
+        </div>`).join('') : '<div class="text-xs text-gray-500 font-bold">還沒有自動備份，資料有變動後約 15 秒會建立第一份。</div>';
+      icons();
+    }
+    window.useAutoSnap = async (key, act) => {
+      const s = (await snapList(activeTripId)).find(x => x.key === key); if (!s) return;
+      if (act === 'export') { const d = new Date(s.ts), p = (n) => String(n).padStart(2, '0'); window.exportBackupJSON(s.data, `自動備份_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`); }
+      else { showBackupPreview(s.data); $('backupPreview').parentElement.parentElement.scrollTop = 0; }
+    };
 
     // ===== Modal helpers =====
     window.openModal = (id) => {
