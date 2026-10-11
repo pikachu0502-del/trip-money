@@ -532,9 +532,10 @@
         <h2 class="text-base font-black text-gray-700 flex items-center gap-2"><i data-lucide="bed-double" class="w-4 h-4"></i>住宿設定</h2>
         <button onclick="window.closeModal('lodgingModal')" title="關閉"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
-      <div class="p-6 space-y-3 relative overflow-y-auto">
+      <div class="p-6 space-y-3 relative overflow-y-auto overflow-x-hidden">
         <div id="lodgeSaveLoader" class="loading-overlay"><i data-lucide="loader-2" class="w-8 h-8 animate-spin text-blue-500"></i></div>
         <p class="text-[10px] text-gray-400 font-bold">填金額會自動依晚數拆成每日「住宿」支出；儲存後點首頁住宿卡可跳地圖定位。</p>
+        <div id="lodgeStrip"></div>
         <div id="lodgingEditList" class="space-y-2"></div>
         <button onclick="window.addLodgingRow()" class="w-full border-2 border-dashed border-gray-200 text-gray-400 hover:text-blue-500 hover:border-blue-300 rounded-xl py-2 text-xs font-black flex items-center justify-center gap-1 transition-all"><i data-lucide="plus" class="w-3.5 h-3.5"></i>新增一間住宿</button>
       </div>
@@ -2584,8 +2585,68 @@
             <select onchange="window.setLodgingField(${i},'currency',this.value)" class="border border-gray-100 rounded-lg px-1 py-1 text-xs font-bold outline-none cursor-pointer">${CURRENCIES.map(c => `<option value="${c.code}" ${((l.currency || 'TWD') === c.code) ? 'selected' : ''}>${c.code}</option>`).join('')}</select>
           </div>
         </div>`).join('');
+      renderLodgeStrip();
       icons();
     }
+    const ldAdd = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+    const ldDiff = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 864e5);
+    function lodgeNights() {
+      const ls = lodgingDraft.filter(l => l.checkin);
+      let s = tripMeta.startDate, e = tripMeta.endDate ? ldAdd(tripMeta.endDate, -1) : null;
+      ls.forEach(l => { const o = ldAdd(l.checkin, (+l.nights || 1) - 1); if (!s || l.checkin < s) s = l.checkin; if (!e || o > e) e = o; });
+      if (!s || !e || e < s) { if (!ls.length) return []; s = s || todayStr(); e = s; }
+      const pad = (tripMeta.startDate && tripMeta.endDate) ? 2 : 4;
+      s = ldAdd(s, -pad); e = ldAdd(e, pad + 1);
+      const n = Math.min(ldDiff(s, e) + 1, 60);
+      return Array.from({ length: n }, (_, i) => ldAdd(s, i));
+    }
+    function renderLodgeStrip() {
+      const box = $('lodgeStrip'); if (!box) return;
+      const days = lodgeNights(), N = days.length;
+      if (!N || !lodgingDraft.length) { box.innerHTML = ''; return; }
+      const inTrip = d => !tripMeta.startDate || !tripMeta.endDate || (d >= tripMeta.startDate && d < tripMeta.endDate);
+      const cover = days.map(d => lodgingDraft.filter(l => l.checkin && d >= l.checkin && d < ldAdd(l.checkin, +l.nights || 1)).length);
+      const W = 46, wk = '日一二三四五六';
+      const over = cover.filter(c => c > 1).length, gap = days.filter((d, i) => !cover[i] && inTrip(d) && (tripMeta.startDate || lodgingDraft.some(l => l.checkin && l.checkin <= d) && lodgingDraft.some(l => l.checkin && ldAdd(l.checkin, +l.nights || 1) > d))).length;
+      box.innerHTML = `<div class="rounded-xl bg-[#EEF1F4] p-2.5 space-y-2">
+        <div class="flex items-center gap-1.5 text-[11px] font-bold text-[#556576]"><i data-lucide="move-horizontal" class="w-3.5 h-3.5"></i>拖曳色條改入住日，拖右端改晚數
+          ${over ? `<span class="ml-auto px-1.5 py-0.5 rounded-full bg-[#F6E4E0] text-[#9A4636] font-black">${over} 晚重複</span>` : ''}${gap ? `<span class="${over ? '' : 'ml-auto '}px-1.5 py-0.5 rounded-full bg-[#F8EEDF] text-[#8E5F22] font-black">${gap} 晚未安排</span>` : ''}</div>
+        <div class="overflow-x-auto"><div id="lodgeTrack" class="relative" style="width:${N * W}px;min-width:100%">
+          <div class="grid" style="grid-template-columns:repeat(${N},minmax(0,1fr))">${days.map((d, i) => { const dt = new Date(d + 'T00:00:00Z'); return `<div class="text-center py-1 rounded-md ${cover[i] > 1 ? 'bg-[#F6E4E0] text-[#9A4636]' : !inTrip(d) ? 'text-[#9AA6B2] opacity-70' : !cover[i] && tripMeta.startDate ? 'bg-[#F8EEDF] text-[#8E5F22]' : 'text-[#556576]'}"><div class="text-[11px] font-black leading-tight">${dt.getUTCMonth() + 1}/${dt.getUTCDate()}</div><div class="text-[10px] font-bold leading-tight">${wk[dt.getUTCDay()]}</div></div>`; }).join('')}</div>
+          <div class="absolute inset-0 top-9 grid pointer-events-none" style="grid-template-columns:repeat(${N},minmax(0,1fr))">${days.map(() => '<div class="border-l border-[#DCE1E7]"></div>').join('')}</div>
+          <div class="relative mt-1 space-y-1">${lodgingDraft.map((l, i) => {
+            if (!l.checkin) return '';
+            const c0 = ldDiff(days[0], l.checkin), n = +l.nights || 1;
+            return `<div class="relative h-9"><div data-lbar="${i}" onpointerdown="window.lodgeDrag(event,${i},'move')" class="absolute top-0 bottom-0 rounded-lg text-white flex items-center pl-2 pr-4 cursor-grab active:cursor-grabbing select-none shadow-sm" style="touch-action:none;background:${lodgeColor(l, i)};left:calc(${c0 / N * 100}% + 2px);width:calc(${n / N * 100}% - 4px)">
+              <span class="text-[11px] font-black truncate" data-lbl>${esc(l.name || '未命名')} · ${n}晚</span>
+              <span onpointerdown="window.lodgeDrag(event,${i},'resize')" title="拖曳調整晚數" class="absolute right-0 top-0 bottom-0 w-4 flex items-center justify-center cursor-ew-resize" style="touch-action:none"><span class="w-1 h-4 rounded-full bg-white/80"></span></span>
+            </div></div>`; }).join('')}</div>
+        </div></div>
+      </div>`;
+    }
+    window.lodgeDrag = (ev, i, mode) => {
+      ev.preventDefault(); ev.stopPropagation();
+      const days = lodgeNights(), N = days.length, l = lodgingDraft[i];
+      const bar = document.querySelector(`[data-lbar="${i}"]`), track = $('lodgeTrack');
+      if (!bar || !track || !N) return;
+      const colW = track.getBoundingClientRect().width / N, x0 = ev.clientX;
+      const c0 = ldDiff(days[0], l.checkin), n0 = +l.nights || 1;
+      let c = c0, n = n0;
+      bar.style.zIndex = 5; bar.style.boxShadow = '0 6px 16px rgba(41,60,78,.25)';
+      const move = (e) => {
+        const d = Math.round((e.clientX - x0) / colW);
+        if (mode === 'move') { c = Math.max(0, Math.min(N - n0, c0 + d)); }
+        else { n = Math.max(1, Math.min(N - c0, n0 + d)); }
+        bar.style.left = `calc(${c / N * 100}% + 2px)`; bar.style.width = `calc(${n / N * 100}% - 4px)`;
+        bar.querySelector('[data-lbl]').textContent = `${l.name || '未命名'} · ${n}晚`;
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+        l.checkin = days[c]; l.nights = n;
+        sortLodgingDraft(); renderLodgingDraft();
+      };
+      window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+    };
     window.saveTripMeta = async () => {
       if (!activeTripId) return;
       const loader = $('metaSaveLoader'); loader.classList.add('active');
