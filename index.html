@@ -348,8 +348,8 @@
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">支付方式</label><select id="expPayment" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">模式</label><select id="expSplitMethod" onchange="window.updateEstimate()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">支付人</label><select id="expPayer" onchange="window.updateEstimate()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
-          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">日期</label><input id="expDate" type="date" onchange="window.buildItinLinkOpts()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
-          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">行程時間 (選填)</label><input id="expScheduleTime" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" oninput="window.maskTime(this)" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /></div>
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">消費日期</label><input id="expDate" type="date" onchange="window.buildItinLinkOpts()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /><p class="text-[10px] text-[#556576] font-bold mt-1">實際付款／旅程當天的日期，非填寫當下</p></div>
+          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">排入行程時間 (選填)</label><input id="expScheduleTime" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" oninput="window.maskTime(this)" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /><p class="text-[10px] text-[#556576] font-bold mt-1">填了會排進當天時間軸，如晚餐 18:30</p></div>
           <div class="col-span-2"><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">連結行程 (選填)</label><select id="expItinLink" onchange="window.onItinLinkChange()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select><p id="expItinLinkHint" class="text-[10px] text-gray-400 font-bold mt-1" x-hidden>已連結：這筆支出會併入該行程卡顯示，不會在時間軸重複出現</p></div>
         </div>
 
@@ -1894,18 +1894,76 @@
     const toMinOfDay = (t) => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
     const legKey = (mode, a, b) => `${mode}|${a.lat.toFixed(5)},${a.lng.toFixed(5)}|${b.lat.toFixed(5)},${b.lng.toFixed(5)}`;
     function legText(mode, min, km, approx) { return `${TRAVEL_MODES[mode].label} ${approx ? '約 ' : ''}${fmtMin(min)} · ${fmtKm(km)}`; }
-    function legWarn(gap, min) { return gap != null && gap < min ? `前往此站可能需要更多時間：交通約 ${fmtMin(min)}，僅預留 ${fmtMin(Math.max(gap, 0))}` : ''; }
+    const BUFFER_MIN = 10;
+    function legWarn(gap, min) {
+      if (gap == null || gap < 0) return '';
+      if (gap < min) return `交通約 ${fmtMin(min)}，僅預留 ${fmtMin(gap)}，可能遲到`;
+      if (gap < min + BUFFER_MIN) return `交通緩衝僅 ${gap - min} 分鐘（建議至少 ${BUFFER_MIN} 分鐘）`;
+      return '';
+    }
+    function legData(prev, cur) {
+      if (!hasGeo(prev) || !hasGeo(cur)) return null;
+      const km0 = haversineKm(prev, cur);
+      const mode = pickMode(cur.transport, km0);
+      const key = legKey(mode, prev, cur), hit = routeCache[key];
+      const min = hit ? hit.min : estimateMin(mode, km0), km = hit ? hit.km : km0;
+      const a0 = toMinOfDay(prev.time), a = a0 == null ? null : a0 + (+prev.duration || 0), b = toMinOfDay(cur.time);
+      return { km0, mode, key, hit, min, km, gap: a != null && b != null ? b - a : null };
+    }
+    function routeCheck(items) {
+      const out = [];
+      let prevEnd = null;
+      items.forEach((it, i) => {
+        const st = toMinOfDay(it.time);
+        const ov = st != null && prevEnd != null && st < prevEnd;
+        if (ov) out.push({ t: 'overlap', i, text: `第 ${i}、${i + 1} 站時間重疊 ${fmtMin(prevEnd - st)}`, sub: `${it.title || '未命名'} 開始時，上一行程尚未結束` });
+        if (st != null) prevEnd = Math.max(prevEnd || 0, st + (+it.duration || 0));
+        if (!i || ov) return;
+        const L = legData(items[i - 1], it);
+        if (!L || L.km0 < 0.03 || L.gap == null || L.gap < 0) return;
+        if (L.gap < L.min) out.push({ t: 'late', i, text: `第 ${i} → ${i + 1} 站交通時間不足`, sub: `${TRAVEL_MODES[L.mode].label}約 ${fmtMin(L.min)}，僅預留 ${fmtMin(L.gap)}` });
+        else if (L.gap < L.min + BUFFER_MIN) out.push({ t: 'buffer', i, text: `第 ${i} → ${i + 1} 站緩衝不足`, sub: `抵達後只剩 ${L.gap - L.min} 分鐘，建議預留 ${BUFFER_MIN} 分鐘以上` });
+      });
+      const g = items.map((it, i) => ({ it, i })).filter(x => hasGeo(x.it));
+      const d = (a, b) => (a && b) ? haversineKm(a.it, b.it) : 0;
+      const flagged = new Set();
+      for (let j = 1; j < g.length - 1; j++) {
+        const A = g[j - 1], B = g[j], C = g[j + 1], D = g[j + 2];
+        const cur = d(A, B) + d(B, C) + d(C, D), sw = d(A, C) + d(C, B) + d(B, D);
+        if (cur - sw > 2 && (cur - sw) / cur > 0.25) {
+          out.push({ t: 'detour', i: B.i, text: `第 ${B.i + 1}、${C.i + 1} 站順序繞路`, sub: `對調「${B.it.title || '未命名'}」與「${C.it.title || '未命名'}」約可少走 ${fmtKm(cur - sw)}（直線）` });
+          flagged.add(j); flagged.add(j + 1); continue;
+        }
+        const extra = d(A, B) + d(B, C) - d(A, C);
+        if (!flagged.has(j) && extra > 3 && d(A, B) + d(B, C) > 2.5 * d(A, C)) {
+          out.push({ t: 'detour', i: B.i, text: `第 ${B.i + 1} 站造成折返`, sub: `「${B.it.title || '未命名'}」偏離動線，多走約 ${fmtKm(extra)}（直線）` });
+          flagged.add(j);
+        }
+      }
+      return out.sort((a, b) => a.i - b.i);
+    }
+    const CHECK_LOOK = {
+      overlap: { icon: 'layers', bg: '#F8EEDF', fg: '#8E5F22' },
+      late: { icon: 'alarm-clock', bg: '#F6E4E0', fg: '#9A4636' },
+      buffer: { icon: 'timer', bg: '#F8EEDF', fg: '#8E5F22' },
+      detour: { icon: 'undo-2', bg: '#E3EBF2', fg: '#3D6280' }
+    };
+    function checkCard(items) {
+      if (items.length < 2) return '';
+      const issues = routeCheck(items);
+      const clickable = itinView === 'map';
+      return `<div class="bg-white rounded-2xl border border-[#DFE3E8] p-3.5 space-y-2">
+        <div class="flex items-center gap-2"><i data-lucide="${issues.length ? 'shield-alert' : 'shield-check'}" class="w-4 h-4" style="color:${issues.length ? '#8E5F22' : '#26685E'}"></i><span class="font-black text-sm text-[#293C4E]">動線檢查</span>
+          <span class="ml-auto text-[11px] font-black px-2 py-0.5 rounded-full ${issues.length ? 'bg-[#F8EEDF] text-[#8E5F22]' : 'bg-[#E1EFEB] text-[#26685E]'}">${issues.length ? `${issues.length} 項提醒` : '動線順暢'}</span></div>
+        ${issues.length ? `<div class="space-y-1.5">${issues.map(x => { const k = CHECK_LOOK[x.t]; return `<${clickable ? `button onclick="window.focusStop(${x.i})"` : 'div'} class="w-full text-left flex gap-2 px-2.5 py-2 rounded-xl" style="background:${k.bg};color:${k.fg}"><i data-lucide="${k.icon}" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i><span class="min-w-0"><span class="block text-xs font-black">${esc(x.text)}</span><span class="block text-[11px] font-bold opacity-90">${esc(x.sub)}</span></span></${clickable ? 'button' : 'div'}>`; }).join('')}</div>`
+          : `<p class="text-[11px] font-bold text-[#556576]">沒有時間重疊、交通緩衝皆 ≥ ${BUFFER_MIN} 分鐘、未發現明顯繞路</p>`}
+      </div>`;
+    }
+    function refreshItinCheck() { const el = $('itinCheck'); if (el && selectedItinDate) { el.innerHTML = checkCard(itinDayItems(selectedItinDate)); icons(); } }
     function travelLeg(prev, cur) {
       if (!hasGeo(prev) || !hasGeo(cur)) return (prev.location && cur.location) ? `<div class="flex items-center gap-1.5 pl-[4.25rem] py-2 text-[11px] font-bold text-[#556576]"><i data-lucide="route" class="w-3.5 h-3.5"></i>交通時間待確認</div>` : '';
-      const km0 = haversineKm(prev, cur);
+      const { km0, mode, key, hit, min, km, gap } = legData(prev, cur);
       if (km0 < 0.03) return '';
-      const mode = pickMode(cur.transport, km0);
-      const key = legKey(mode, prev, cur);
-      const hit = routeCache[key];
-      const min = hit ? hit.min : estimateMin(mode, km0);
-      const km = hit ? hit.km : km0;
-      const a0 = toMinOfDay(prev.time), a = a0 == null ? null : a0 + (+prev.duration || 0), b = toMinOfDay(cur.time);
-      const gap = a != null && b != null ? b - a : null;
       const warn = legWarn(gap, min);
       const gm = `https://www.google.com/maps/dir/?api=1&origin=${prev.lat},${prev.lng}&destination=${cur.lat},${cur.lng}&travelmode=${TRAVEL_MODES[mode].gm}`;
       const pending = !hit && TRAVEL_MODES[mode].osrm;
@@ -1923,6 +1981,7 @@
     async function fillTravelLegs() {
       if (legsRunning) return;
       legsRunning = true;
+      let changed = false;
       try {
         let el;
         while ((el = document.querySelector('.travel-leg[data-pending]'))) {
@@ -1943,6 +2002,7 @@
           }
           const hit = routeCache[key];
           if (!hit) continue;
+          changed = true;
           document.querySelectorAll(`.travel-leg[data-key="${CSS.escape(key)}"]`).forEach(node => {
             node.removeAttribute('data-pending');
             node.querySelector('.leg-text').textContent = legText(mode, hit.min, hit.km, false);
@@ -1952,11 +2012,70 @@
             if (w) wEl.removeAttribute('x-hidden'); else wEl.setAttribute('x-hidden', '');
           });
         }
-      } finally { legsRunning = false; }
+      } finally { legsRunning = false; if (changed) refreshItinCheck(); }
     }
 
     let selectedItinDate = null;
     let itinDates = [];
+    let itinView = 'timeline', itinMap = null, itinMarkers = [];
+    window.setItinView = (v) => { itinView = v; renderItinerary(); };
+    window.focusStop = (i) => {
+      const m = itinMarkers[i];
+      if (!m || !itinMap) return;
+      itinMap.setView(m.getLatLng(), Math.max(itinMap.getZoom(), 15));
+      m.openPopup();
+      const box = $('itinMapBox');
+      if (box) { const y = box.getBoundingClientRect().top + window.scrollY - 80; window.scrollTo({ top: y, behavior: 'smooth' }); }
+    };
+    function itemLook(it) {
+      if (it._flight) return { icon: 'plane', color: '#3F8A9E', click: `window.editFlight('${it.dbId}')`, sub: esc(it.sub) };
+      if (it._spend) return { icon: CAT_ICON[it.category] || 'receipt', color: CAT_COLOR[it.category] || '#3F8A9E', click: `window.editExpense('${it.dbId}')`,
+        sub: [esc(it.category || '消費'), `${curSym(it.currency)}${Math.round(it.amount).toLocaleString()}`, esc(it.location || '')].filter(Boolean).join(' · ') };
+      const ty = ITIN_TYPES[it.type] || ITIN_TYPES['其他'];
+      return { icon: ty.icon, color: ty.color, click: `window.editItin('${it.dbId}')`, sub: [esc(it.type || '其他'), esc(it.location || '')].filter(Boolean).join(' · ') };
+    }
+    function dayNavUrl(items) {
+      const g = items.filter(hasGeo).map(p => `${p.lat},${p.lng}`);
+      if (g.length < 2) return '';
+      const mode = TRAVEL_MODES[tripMeta.defaultTransport] ? TRAVEL_MODES[tripMeta.defaultTransport].gm : 'transit';
+      const wp = g.slice(1, -1).slice(0, 8);
+      return `https://www.google.com/maps/dir/?api=1&origin=${g[0]}&destination=${g[g.length - 1]}${wp.length ? '&waypoints=' + encodeURIComponent(wp.join('|')) : ''}&travelmode=${wp.length ? 'driving' : mode}`;
+    }
+    function mountItinMap(items, lodge) {
+      if (itinMap) { itinMap.remove(); itinMap = null; }
+      itinMarkers = [];
+      const box = $('itinMapView');
+      if (!box || typeof L === 'undefined') return;
+      itinMap = L.map(box, { scrollWheelZoom: false, zoomControl: true }).setView([25.03, 121.56], 11);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(itinMap);
+      const issues = routeCheck(items), warnAt = new Set(issues.filter(x => x.t !== 'overlap').map(x => x.i));
+      const bounds = [];
+      let last = null;
+      items.forEach((it, i) => {
+        if (!hasGeo(it)) return;
+        const look = itemLook(it), ll = [it.lat, it.lng];
+        if (last) {
+          const L0 = legData(last.it, it), bad = warnAt.has(i) || warnAt.has(last.i);
+          L.polyline([[last.it.lat, last.it.lng], ll], { color: bad ? '#C58B42' : '#527C9B', weight: 4, opacity: .85, dashArray: '2 8', lineCap: 'round' })
+            .bindTooltip(L0 ? legText(L0.mode, L0.min, L0.km, !L0.hit || L0.mode === 'transit') : '', { sticky: true }).addTo(itinMap);
+        }
+        const icon = L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -14],
+          html: `<div style="width:28px;height:28px;border-radius:50%;background:${look.color};color:#fff;font:800 12px/24px system-ui,sans-serif;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(41,60,78,.35)">${i + 1}</div>` });
+        const m = L.marker(ll, { icon, zIndexOffset: 100 }).addTo(itinMap)
+          .bindPopup(`<div style="font-weight:900;color:#293C4E">${i + 1}. ${esc(it.title || '未命名')}</div><div style="font-size:11px;font-weight:700;color:#556576">${esc(it.time || '未定時間')}${+it.duration ? ' · ' + fmtMin(+it.duration) : ''}</div>${navBtn(it.lat, it.lng, '')}`);
+        itinMarkers[i] = m;
+        bounds.push(ll);
+        last = { it, i };
+      });
+      if (lodge && hasGeo(lodge)) {
+        L.marker([lodge.lat, lodge.lng], { icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: `<div style="width:26px;height:26px;border-radius:8px;background:#7A6FA8;color:#fff;font:800 13px/22px system-ui;text-align:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(41,60,78,.35)">宿</div>` }) })
+          .addTo(itinMap).bindPopup(`<div style="font-weight:900;color:#293C4E">${esc(lodge.name || '住宿')}</div>${navBtn(lodge.lat, lodge.lng, '')}`);
+        bounds.push([lodge.lat, lodge.lng]);
+      }
+      if (bounds.length === 1) itinMap.setView(bounds[0], 15);
+      else if (bounds.length) itinMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
+      setTimeout(() => itinMap && itinMap.invalidateSize(), 60);
+    }
     window.selectItinDate = (d) => { selectedItinDate = d; renderItinerary(); };
     window.itinWeek = (delta) => {
       const page = Math.floor(itinDates.indexOf(selectedItinDate) / 7) + delta;
@@ -2054,23 +2173,21 @@
       }
       const lodge = lodgingForDate(sel);
       let prevEnd = null;
+      const isMap = itinView === 'map';
       const rows = items.map((it, idx) => {
         const st = toMinOfDay(it.time);
         let warn = '';
         if (st != null && prevEnd != null && st < prevEnd) warn = `與上一行程重疊 ${fmtMin(prevEnd - st)}`;
-        if (st != null) prevEnd = st + (+it.duration || 0);
+        if (st != null) prevEnd = Math.max(prevEnd || 0, st + (+it.duration || 0));
         const leg = idx ? travelLeg(items[idx - 1], it) : '';
-        let icon, color, sub, click;
-        if (it._flight) {
-          icon = 'plane'; color = '#3F8A9E'; click = `window.editFlight('${it.dbId}')`; sub = esc(it.sub);
-        } else if (it._spend) {
-          icon = CAT_ICON[it.category] || 'receipt'; color = CAT_COLOR[it.category] || '#3F8A9E'; click = `window.editExpense('${it.dbId}')`;
-          sub = [esc(it.category || '消費'), `${curSym(it.currency)}${Math.round(it.amount).toLocaleString()}`, esc(it.location || '')].filter(Boolean).join(' · ');
-        } else {
-          const ty = ITIN_TYPES[it.type] || ITIN_TYPES['其他'];
-          icon = ty.icon; color = ty.color; click = `window.editItin('${it.dbId}')`;
-          sub = [esc(it.type || '其他'), esc(it.location || '')].filter(Boolean).join(' · ');
-        }
+        const { icon, color, sub, click } = itemLook(it);
+        if (isMap) return leg + `<div class="flex gap-3 items-center">
+          <div class="w-14 shrink-0 flex justify-center"><span class="w-7 h-7 rounded-full text-white text-xs font-black flex items-center justify-center ${hasGeo(it) ? '' : 'opacity-50'}" style="background:${color}">${idx + 1}</span></div>
+          <div ${hasGeo(it) ? `onclick="window.focusStop(${idx})"` : `onclick="${click}"`} class="flex-1 min-w-0 bg-white border border-[#DFE3E8] rounded-xl px-3 py-2.5 hover:border-[#BCCFDD] cursor-pointer flex items-center gap-2">
+            <span class="min-w-0 flex-1"><span class="block font-black text-sm text-[#293C4E] truncate">${esc(it.title || '未命名')}</span><span class="block text-[11px] font-bold text-[#556576] truncate">${esc(it.time || '未定時間')}${+it.duration ? ' · ' + fmtMin(+it.duration) : ''}${hasGeo(it) ? '' : ' · 未定位，無法顯示於地圖'}</span></span>
+            ${hasGeo(it) ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${it.lat},${it.lng}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#E3EBF2] text-[#3D6280] text-[11px] font-black"><i data-lucide="navigation" class="w-3 h-3"></i>導航</a>` : ''}
+          </div>
+        </div>`;
         return leg + `<div class="flex gap-3">
           <div class="w-14 shrink-0 pt-3.5">
             <div class="text-sm font-black text-[#293C4E]">${esc(it.time || '—')}</div>
@@ -2088,15 +2205,26 @@
         </div>`;
       }).join('');
 
+      const geoN = items.filter(hasGeo).length, navAll = dayNavUrl(items);
+      const seg = (v, ic, l) => `<button onclick="window.setItinView('${v}')" class="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-black transition-colors ${itinView === v ? 'bg-white text-[#293C4E] shadow-sm' : 'text-[#556576] hover:text-[#293C4E]'}"><i data-lucide="${ic}" class="w-3.5 h-3.5"></i>${l}</button>`;
       $('itineraryList').innerHTML = `<div class="space-y-3">
-        <div class="flex items-baseline justify-between px-1">
-          <span class="font-black text-[#293C4E]">${sel === t ? '今日' : '當日'} ${items.length} 個行程</span>
-          ${range ? `<span class="text-xs font-bold text-[#556576]">${range}</span>` : ''}
+        <div class="flex items-center justify-between gap-2 px-1">
+          <div class="min-w-0"><div class="font-black text-[#293C4E]">${sel === t ? '今日' : '當日'} ${items.length} 個行程</div>${range ? `<div class="text-xs font-bold text-[#556576]">${range}</div>` : ''}</div>
+          <div class="shrink-0 flex p-0.5 rounded-xl bg-[#E2E6EB]">${seg('timeline', 'list', '時間軸')}${seg('map', 'map', '地圖')}</div>
         </div>
+        <div id="itinCheck">${checkCard(items)}</div>
+        ${isMap && items.length ? `<div id="itinMapBox" class="bg-white rounded-2xl border border-[#DFE3E8] overflow-hidden">
+          ${geoN ? `<div id="itinMapView" style="height:320px;isolation:isolate"></div>` : `<div class="py-10 px-6 text-center text-sm font-bold text-[#556576]"><i data-lucide="map-pin-off" class="w-8 h-8 mx-auto mb-2 text-[#B7C1CC]"></i>當日行程都還沒有定位<br/>編輯行程並填入地點後即可顯示於地圖</div>`}
+          <div class="flex items-center gap-2 px-3 py-2.5 border-t border-[#DFE3E8] text-[11px] font-bold text-[#556576]">
+            <span>${geoN}/${items.length} 站已定位</span>
+            ${navAll ? `<a href="${navAll}" target="_blank" rel="noopener" class="ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#527C9B] text-white font-black"><i data-lucide="navigation" class="w-3.5 h-3.5"></i>全日路線導航</a>` : ''}
+          </div>
+        </div>` : ''}
         ${lodge ? `<div class="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black text-white" style="background:${lodgeColor(lodge, lodge._idx)}"><i data-lucide="bed-double" class="w-3.5 h-3.5"></i>${esc(lodge.name)} · 第 ${lodge.night} 晚</div>` : ''}
         ${items.length ? `<div>${rows}</div>` : `<div class="text-center py-10 bg-white rounded-2xl border border-[#DFE3E8]"><p class="text-sm font-bold text-[#556576] mb-3">這天還沒安排</p><button onclick="window.openAddItin()" class="px-4 py-2 rounded-xl bg-[#527C9B] text-white text-sm font-black">新增行程</button></div>`}
       </div>`;
       icons();
+      if (isMap && geoN) mountItinMap(items, lodge); else if (itinMap) { itinMap.remove(); itinMap = null; itinMarkers = []; }
       fillTravelLegs();
     }
 
