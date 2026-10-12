@@ -196,8 +196,10 @@
       <div class="flex gap-2 mb-5">
         <button id="listTabWish" onclick="window.setListType('wish')" class="listtab flex-1 px-4 py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-1.5 transition-all"><i data-lucide="sparkles" class="w-4 h-4"></i>願望清單</button>
         <button id="listTabBuy" onclick="window.setListType('buy')" class="listtab flex-1 px-4 py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-1.5 transition-all"><i data-lucide="shopping-bag" class="w-4 h-4"></i>必買清單</button>
+        <button id="listTabNote" onclick="window.setListType('note')" class="listtab flex-1 px-4 py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-1.5 transition-all"><i data-lucide="notebook-pen" class="w-4 h-4"></i>記事本</button>
       </div>
-      <div class="bg-white rounded-2xl shadow-sm border border-[#DFE3E8] p-4 mb-4">
+      <button id="noteAddBtn" x-hidden onclick="window.openNote()" class="w-full mb-4 flex items-center justify-center gap-1.5 bg-[#527C9B] text-white rounded-xl py-3 font-black text-sm hover:bg-[#456A86]"><i data-lucide="plus" class="w-4 h-4"></i>新增筆記</button>
+      <div id="listAddBox" class="bg-white rounded-2xl shadow-sm border border-[#DFE3E8] p-4 mb-4">
         <div class="flex gap-2">
           <input id="newListInput" type="text" placeholder="新增項目…" onkeydown="if(event.key==='Enter')window.addListItem()" class="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-gray-50 font-bold outline-none focus:border-blue-400" />
           <select id="newListMember" title="誰的" class="border border-gray-200 rounded-lg px-2 text-xs bg-gray-50 font-bold outline-none cursor-pointer max-w-[90px]"></select>
@@ -460,6 +462,31 @@
           <p class="text-[11px] text-gray-500 font-bold">資料有變動時，會自動在這支手機保留最近幾份備份。清除瀏覽器資料或換手機就會消失，請定期用上方「匯出完整備份檔」另外保存。</p>
           <div id="autoSnapList" class="space-y-2"></div>
         </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- 記事本 Modal -->
+  <div id="noteModal" class="modal !items-start sm:!items-center overflow-y-auto">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl my-4 overflow-hidden flex flex-col max-h-[94vh]">
+      <div class="p-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
+        <h2 id="noteModalTitle" class="text-base font-black text-gray-700">新增筆記</h2>
+        <button onclick="window.closeModal('noteModal')" title="關閉"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-5 space-y-3 relative overflow-y-auto">
+        <div id="noteSaveLoader" class="loading-overlay"><i data-lucide="loader-2" class="w-8 h-8 animate-spin text-blue-500"></i></div>
+        <input id="noteTitle" type="text" placeholder="標題" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-black text-[#293C4E]" />
+        <textarea id="noteBody" rows="7" placeholder="寫點什麼…" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold text-sm leading-relaxed resize-y"></textarea>
+        <div>
+          <div class="flex items-center justify-between mb-1.5"><span class="text-[10px] text-gray-400 font-bold uppercase">照片</span><span id="notePhotoCount" class="text-[10px] text-[#556576] font-bold"></span></div>
+          <div id="notePhotos" class="grid grid-cols-3 gap-2"></div>
+          <input id="notePhotoInput" type="file" accept="image/*" multiple class="hidden" onchange="window.addNotePhotos(this)" />
+          <p class="text-[10px] text-[#556576] font-bold mt-1.5">每則最多 6 張，會自動壓縮</p>
+        </div>
+        <div class="flex gap-2 pt-1">
+          <button id="noteDelBtn" onclick="window.deleteNote()" class="px-4 py-3 rounded-xl border border-[#E8CFC9] text-[#9A4636] font-black text-sm">刪除</button>
+          <button onclick="window.saveNote()" class="flex-1 py-3 rounded-xl bg-[#527C9B] text-white font-black text-sm hover:bg-[#456A86]">儲存筆記</button>
+        </div>
       </div>
     </div>
   </div>
@@ -2390,10 +2417,15 @@
       const off = 'listtab flex-1 px-4 py-2.5 rounded-lg text-sm font-black flex items-center justify-center gap-1.5 transition-all bg-transparent text-gray-400 hover:bg-white';
       $('listTabWish').className = t === 'wish' ? on : off;
       $('listTabBuy').className = t === 'buy' ? on : off;
+      $('listTabNote').className = t === 'note' ? on : off;
+      const isNote = t === 'note';
+      $('listAddBox').toggleAttribute('x-hidden', isNote);
+      $('noteAddBtn').toggleAttribute('x-hidden', !isNote);
       renderLists();
     };
     function renderLists() {
       $('newListMember').innerHTML = `<option value="">未指定</option>` + people.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+      if (listType === 'note') { renderNotes(); return; }
       const items = lists.filter(l => (l.listType || 'wish') === listType);
       const done = items.filter(i => i.done).length;
       $('listProgress').innerHTML = items.length ? `<div class="flex items-center gap-3"><div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-blue-400 rounded-full transition-all" style="width:${Math.round(done/items.length*100)}%"></div></div><span class="text-xs text-gray-400 font-black">${done}/${items.length}</span></div>` : '';
@@ -2424,6 +2456,89 @@
     };
     window.deleteListItem = async (id) => {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', `lists_${activeTripId}`, id));
+    };
+
+    // ===== 記事本（存於 lists，listType: 'note'）=====
+    const NOTE_MAX_PHOTOS = 6;
+    let editingNoteId = null, noteDraftPhotos = [];
+    function noteDateText(ts) { if (!ts) return ''; const d = new Date(ts); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+    function renderNotes() {
+      $('listProgress').innerHTML = '';
+      const notes = lists.filter(l => l.listType === 'note').sort((a, b) => (b.updated_at || b.created_at || 0) - (a.updated_at || a.created_at || 0));
+      $('listItems').innerHTML = notes.length ? notes.map(n => {
+        const ph = n.photos || [];
+        return `<button onclick="window.openNote('${n.dbId}')" class="w-full text-left bg-white rounded-xl border border-[#DFE3E8] p-3.5 hover:border-[#BCCFDD] flex gap-3">
+          <div class="flex-1 min-w-0">
+            <div class="font-black text-[#293C4E] truncate">${esc(n.text || '未命名筆記')}</div>
+            ${n.body ? `<div class="text-xs font-bold text-[#556576] mt-0.5 leading-relaxed" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(n.body)}</div>` : ''}
+            <div class="flex items-center gap-2 mt-1.5 text-[10px] font-bold text-[#8A97A5]">${noteDateText(n.updated_at || n.created_at)}${ph.length ? `<span class="flex items-center gap-0.5"><i data-lucide="image" class="w-3 h-3"></i>${ph.length}</span>` : ''}</div>
+          </div>
+          ${ph.length ? `<img src="${ph[0]}" alt="" class="w-16 h-16 rounded-lg object-cover shrink-0" />` : ''}
+        </button>`;
+      }).join('') : `<div class="text-center py-16 text-gray-300 font-bold"><i data-lucide="notebook-pen" class="w-10 h-10 mx-auto mb-2 opacity-20"></i><p>還沒有筆記，記下旅途的點滴吧</p></div>`;
+      icons();
+    }
+    function renderNotePhotos() {
+      const n = noteDraftPhotos.length;
+      $('notePhotoCount').textContent = `${n}/${NOTE_MAX_PHOTOS}`;
+      $('notePhotos').innerHTML = noteDraftPhotos.map((p, i) => `<div class="relative aspect-square"><img src="${p}" alt="" onclick="window.viewNotePhoto(${i})" class="w-full h-full object-cover rounded-lg cursor-zoom-in" /><button onclick="window.removeNotePhoto(${i})" title="移除" class="absolute top-1 right-1 w-6 h-6 rounded-full bg-[#293C4E]/75 text-white flex items-center justify-center"><i data-lucide="x" class="w-3.5 h-3.5"></i></button></div>`).join('')
+        + (n < NOTE_MAX_PHOTOS ? `<button onclick="document.getElementById('notePhotoInput').click()" class="aspect-square rounded-lg border-2 border-dashed border-[#C9D3DC] text-[#556576] flex flex-col items-center justify-center gap-1 hover:border-[#527C9B] hover:text-[#527C9B]"><i data-lucide="image-plus" class="w-5 h-5"></i><span class="text-[10px] font-black">加照片</span></button>` : '');
+      icons();
+    }
+    function shrinkImage(file, max = 1000, q = 0.62) {
+      return new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onerror = rej;
+        r.onload = () => { const img = new Image(); img.onerror = rej; img.onload = () => {
+          const s = Math.min(1, max / Math.max(img.width, img.height));
+          const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          res(c.toDataURL('image/jpeg', q));
+        }; img.src = r.result; };
+        r.readAsDataURL(file);
+      });
+    }
+    window.openNote = (id) => {
+      editingNoteId = id || null;
+      const n = id ? listsCache[id] : null;
+      $('noteModalTitle').textContent = n ? '編輯筆記' : '新增筆記';
+      $('noteTitle').value = n ? (n.text || '') : '';
+      $('noteBody').value = n ? (n.body || '') : '';
+      noteDraftPhotos = n && n.photos ? [...n.photos] : [];
+      $('noteDelBtn').toggleAttribute('x-hidden', !n);
+      renderNotePhotos();
+      window.openModal('noteModal');
+    };
+    window.addNotePhotos = async (input) => {
+      const files = [...input.files].slice(0, NOTE_MAX_PHOTOS - noteDraftPhotos.length);
+      input.value = '';
+      if (!files.length) return;
+      $('noteSaveLoader').classList.add('active');
+      try { for (const f of files) noteDraftPhotos.push(await shrinkImage(f)); }
+      catch (e) { console.error(e); alert('照片讀取失敗'); }
+      finally { $('noteSaveLoader').classList.remove('active'); renderNotePhotos(); }
+    };
+    window.removeNotePhoto = (i) => { noteDraftPhotos.splice(i, 1); renderNotePhotos(); };
+    window.viewNotePhoto = (i) => { $('imgPreviewImg').src = noteDraftPhotos[i]; $('imgPreviewModal').classList.add('active'); icons(); };
+    window.saveNote = async () => {
+      if (!isAuthed || !activeTripId) return;
+      const text = $('noteTitle').value.trim(), body = $('noteBody').value.trim();
+      if (!text && !body && !noteDraftPhotos.length) { alert('筆記是空的'); return; }
+      const size = noteDraftPhotos.reduce((s, p) => s + p.length, 0) + body.length * 3;
+      if (size > 950000) { alert('照片總容量過大，請移除一兩張再儲存'); return; }
+      const loader = $('noteSaveLoader'); loader.classList.add('active');
+      try {
+        const col = `lists_${activeTripId}`, data = { text, body, photos: noteDraftPhotos, listType: 'note', updated_at: Date.now() };
+        if (editingNoteId) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', col, editingNoteId), data);
+        else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', col), { ...data, member: '', done: false, created_at: Date.now() });
+        window.closeModal('noteModal');
+      } catch (e) { console.error(e); alert('儲存失敗，請稍後再試'); }
+      finally { loader.classList.remove('active'); }
+    };
+    window.deleteNote = async () => {
+      if (!editingNoteId || !confirm('確定刪除這則筆記？')) return;
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', `lists_${activeTripId}`, editingNoteId));
+      window.closeModal('noteModal');
     };
 
     // ===== 即時匯率 =====
