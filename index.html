@@ -1926,9 +1926,16 @@
       for (const l of lodgings) {
         if (!l.checkin || !l.nights) continue;
         const diff = daysBetween(l.checkin, dateStr);
-        if (diff >= 0 && diff < l.nights) return { ...l, night: diff + 1, _idx: lodgings.indexOf(l) };
+        if (diff >= 0 && diff < l.nights) { const g = lodgeGeoOf(l, lodgings); return { ...l, ...(g || {}), night: diff + 1, _idx: lodgings.indexOf(l) }; }
       }
       return null;
+    }
+    const lodgeHasGeo = (l) => l && l.lat != null && l.lng != null && !(l.lat === 0 && l.lng === 0);
+    function lodgeGeoOf(l, all) {
+      if (lodgeHasGeo(l)) return { lat: l.lat, lng: l.lng };
+      const n = (l.name || '').trim(); if (!n) return null;
+      const m = (all || []).find(o => o !== l && (o.name || '').trim() === n && lodgeHasGeo(o));
+      return m ? { lat: m.lat, lng: m.lng } : null;
     }
     // ===== 行經時間自動計算 =====
     const TRAVEL_MODES = {
@@ -2827,7 +2834,9 @@
       const loader = $('lodgeSaveLoader'); loader.classList.add('active');
       try {
         for (const l of lodgingDraft) {
-          if (l.name && (l.lat == null || l._geoName !== l.name)) {
+          if (l.name && (!lodgeHasGeo(l) || l._geoName !== l.name)) {
+            const same = lodgingDraft.find(o => o !== l && o.name === l.name && lodgeHasGeo(o) && (o._geoName === o.name || o._geoName == null));
+            if (same) { l.lat = same.lat; l.lng = same.lng; l._geoName = l.name; continue; }
             const g = await geocode(l.name);
             await new Promise(r => setTimeout(r, 400));
             if (g) { l.lat = g.lat; l.lng = g.lng; l._geoName = l.name; }
@@ -2879,7 +2888,7 @@
       if (!pending.length) return;
       lodgeBackfilling = true;
       try {
-        for (const l of pending) { const g = await geocode(l.name); await new Promise(r => setTimeout(r, 1100)); if (g) { l.lat = g.lat; l.lng = g.lng; } else { l.lat = 0; l.lng = 0; } }
+        for (const l of pending) { const same = lodgeGeoOf(l, lodgings); if (same) { l.lat = same.lat; l.lng = same.lng; continue; } const g = await geocode(l.name); await new Promise(r => setTimeout(r, 1100)); if (g) { l.lat = g.lat; l.lng = g.lng; } else { l.lat = 0; l.lng = 0; } }
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'trip_settings', activeTripId), { meta: { ...tripMeta, lodgings } }, { merge: true });
       } catch (err) { console.warn('住宿補定位中斷', err); }
       finally { lodgeBackfilling = false; }
