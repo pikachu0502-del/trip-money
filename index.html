@@ -117,10 +117,11 @@
       <div class="bg-white rounded-[20px] shadow-[0_1px_3px_rgba(41,60,78,.06)] p-5 space-y-4">
         <div class="relative pr-20">
           <button onclick="window.openBackup()" title="資料備份與還原" class="absolute right-0 top-0 h-10 px-3 rounded-full bg-[#E3EBF2] text-[#456A86] flex items-center gap-1 text-xs font-black hover:bg-[#D7E3EC]"><i data-lucide="shield-check" class="w-4 h-4"></i>備份</button>
-          <div class="text-xs font-bold text-[#556576]">總支出</div>
+          <div class="text-xs font-bold text-[#556576]">總支出（已付款）</div>
           <div id="recTotal" class="text-[32px] leading-tight font-black tracking-tight mt-1">NT$ 0</div>
           <div id="recTotalSub" class="text-[11px] font-bold text-[#556576] mt-0.5"></div>
         </div>
+        <div id="recUnpaid"></div>
         <div class="grid grid-cols-2 gap-3">
           <div class="rounded-2xl bg-[#E3EBF2] p-3.5 min-w-0">
             <label class="flex items-center gap-1 text-xs font-bold text-[#527C9B]"><select id="recMe" onchange="window.setRecMe(this.value)" title="選擇我是誰" class="bg-transparent outline-none cursor-pointer font-bold max-w-[6rem] truncate"></select><span class="shrink-0">的應付</span></label>
@@ -149,6 +150,7 @@
         <h2 class="text-base font-black">支出紀錄</h2>
         <div class="flex items-center gap-2">
           <span id="expenseCount" class="text-[11px] font-bold text-[#556576]">共 0 筆</span>
+          <select id="statusFilter" onchange="window.setStatusFilter(this.value)" title="付款狀態" class="bg-white rounded-xl px-3 py-1.5 text-xs font-bold outline-none cursor-pointer shadow-[0_1px_3px_rgba(41,60,78,.06)]"><option value="all">全部</option><option value="paid">已付款</option><option value="unpaid">未付款</option></select>
           <select id="monthFilter" onchange="window.setMonthFilter(this.value)" title="月份篩選" class="bg-white rounded-xl px-3 py-1.5 text-xs font-bold outline-none cursor-pointer shadow-[0_1px_2px_rgba(41,60,78,.05)]"></select>
         </div>
       </div>
@@ -345,11 +347,18 @@
           <div class="relative"><i data-lucide="align-left" class="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400"></i><input id="expRemarks" maxlength="50" type="text" placeholder="備註 (50字內)" class="w-full pl-9 pr-2 py-2.5 border border-gray-100 rounded-lg bg-gray-50 focus:border-blue-500 outline-none text-sm font-bold" /></div>
         </div>
 
+        <div>
+          <div class="flex p-0.5 rounded-xl bg-[#E2E6EB]">
+            <button id="expStPaid" type="button" onclick="window.setExpStatus('paid')" class="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-black"><i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>已付款</button>
+            <button id="expStUnpaid" type="button" onclick="window.setExpStatus('unpaid')" class="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-black"><i data-lucide="clock" class="w-3.5 h-3.5"></i>未付款</button>
+          </div>
+          <p id="expStHint" class="text-[10px] text-[#8E5F22] font-bold mt-1" x-hidden>未付款不計入總支出與分帳結算，付款後點「標記已付」即可</p>
+        </div>
         <div class="grid grid-cols-2 gap-3 text-sm">
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">分類</label><select id="expCategory" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">支付方式</label><select id="expPayment" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">模式</label><select id="expSplitMethod" onchange="window.updateEstimate()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
-          <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">支付人</label><select id="expPayer" onchange="window.updateEstimate()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
+          <div><label id="expPayerLabel" class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">支付人</label><select id="expPayer" onchange="window.updateEstimate()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select></div>
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">消費日期</label><input id="expDate" type="date" onchange="window.buildItinLinkOpts()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /><p class="text-[10px] text-[#556576] font-bold mt-1">實際付款／旅程當天的日期，非填寫當下</p></div>
           <div><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">排入行程時間 (選填)</label><input id="expScheduleTime" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" oninput="window.maskTime(this)" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none font-bold" /><p class="text-[10px] text-[#556576] font-bold mt-1">填了會排進當天時間軸，如晚餐 18:30</p></div>
           <div class="col-span-2"><label class="text-[10px] text-gray-400 block mb-1 font-bold uppercase">連結行程 (選填)</label><select id="expItinLink" onchange="window.onItinLinkChange()" class="w-full border border-gray-200 rounded-xl p-2.5 bg-gray-50 outline-none cursor-pointer font-bold"></select><p id="expItinLinkHint" class="text-[10px] text-gray-400 font-bold mt-1" x-hidden>已連結：這筆支出會併入該行程卡顯示，不會在時間軸重複出現</p></div>
@@ -1251,9 +1260,11 @@
       }).join('');
       mf.value = selectedMonth;
 
-      const list = selectedMonth === 'all' ? expenses : expenses.filter(e => (e.date || '').slice(0, 7) === selectedMonth);
-      $('expenseCount').innerText = selectedMonth === 'all' ? `共 ${expenses.length} 筆` : `${list.length} / ${expenses.length} 筆`;
-      renderRecSummary(list);
+      const mList = selectedMonth === 'all' ? expenses : expenses.filter(e => (e.date || '').slice(0, 7) === selectedMonth);
+      renderRecSummary(mList);
+      $('statusFilter').value = statusFilter;
+      const list = statusFilter === 'all' ? mList : mList.filter(e => (isUnpaid(e) ? 'unpaid' : 'paid') === statusFilter);
+      $('expenseCount').innerText = list.length === expenses.length ? `共 ${expenses.length} 筆` : `${list.length} / ${expenses.length} 筆`;
       const groups = {};
       list.forEach(x => { (groups[x.date || '未填日期'] = groups[x.date || '未填日期'] || []).push(x); });
       const keys = Object.keys(groups).sort().reverse();
@@ -1264,26 +1275,28 @@
         const sym = curSym(x.currency);
         const amt = parseFloat(x.amount) || 0;
         const twd = amt * (rates[x.currency] || 1);
+        const un = isUnpaid(x);
         return `<div onclick="window.editExpense('${x.dbId}')" class="flex items-center gap-3 min-h-[76px] py-3 cursor-pointer group">
-          <div class="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center overflow-hidden" style="background:${col}1F;color:${col}">
+          <div class="w-11 h-11 rounded-xl shrink-0 flex items-center justify-center overflow-hidden ${un ? 'border-2 border-dashed' : ''}" style="background:${col}1F;color:${col};${un ? `border-color:${col}88` : ''}">
             ${x.previewUrl ? `<img src="${esc(x.previewUrl)}" alt="收據" onclick="event.stopPropagation();window.previewImage('${x.dbId}')" class="w-full h-full object-cover cursor-zoom-in" />` : `<i data-lucide="${CAT_ICON[x.category] || 'receipt'}" class="w-5 h-5"></i>`}
           </div>
           <div class="flex-1 min-w-0">
-            <div class="text-[15px] font-bold truncate">${esc(x.note || x.category || '未命名')}</div>
-            <div class="text-xs font-bold text-[#556576] truncate mt-0.5">${esc(x.category || '')}${x.payer ? ' · ' + esc(x.payer) + ' 支付' : ''}</div>
+            <div class="flex items-center gap-1.5 min-w-0">${un ? '<span class="shrink-0 px-1.5 py-0.5 rounded-md bg-[#F8EEDF] text-[#8E5F22] text-[10px] font-black">未付款</span>' : ''}<span class="text-[15px] font-bold truncate">${esc(x.note || x.category || '未命名')}</span></div>
+            <div class="text-xs font-bold text-[#556576] truncate mt-0.5">${esc(x.category || '')}${x.payer ? ' · ' + esc(x.payer) + (un ? ' 預計支付' : ' 支付') : ''}</div>
             <div class="text-[10px] font-bold text-[#627284] truncate mt-0.5">${[x.paymentMethod || '現金', x.splitMethod, x.location].filter(Boolean).map(esc).join(' · ')}</div>
           </div>
           <div class="text-right shrink-0">
             <div class="text-base font-black">${sym}${Math.round(amt).toLocaleString()}</div>
             ${parseFloat(x.quantity) > 1 ? `<div class="text-[10px] font-bold text-[#627284]">${sym}${(parseFloat(x.unitPrice) || 0).toLocaleString()} × ${x.quantity}</div>` : ''}
             ${x.currency && x.currency !== 'TWD' ? `<div class="text-[10px] font-bold text-[#627284]">${esc(x.currency)} · ≈ NT$${Math.round(twd).toLocaleString()}</div>` : ''}
+            ${un ? `<button onclick="event.stopPropagation();window.markExpensePaid('${x.dbId}')" class="mt-1 px-2 py-1 rounded-lg bg-[#527C9B] text-white text-[10px] font-black hover:bg-[#456A86]">標記已付</button>` : ''}
           </div>
         </div>`;
       };
       $('expenseList').innerHTML = keys.length ? keys.map(k => `<div class="bg-white rounded-[20px] shadow-[0_1px_3px_rgba(41,60,78,.06)] px-4">
           <div class="flex items-center justify-between py-3 border-b border-[#E3E7EC]"><span class="text-sm font-bold">${esc(dayLabel(k))}</span><span class="text-xs font-bold text-[#556576]">${groups[k].length} 筆</span></div>
           <div class="divide-y divide-[#E3E7EC]">${groups[k].map(row).join('')}</div>
-        </div>`).join('') : `<div class="text-center py-16 bg-white rounded-[20px] text-[#627284] font-bold"><i data-lucide="receipt" class="w-10 h-10 mx-auto mb-2 opacity-30"></i><p>${selectedMonth === 'all' ? '尚無支出紀錄' : '此月份無紀錄'}</p></div>`;
+        </div>`).join('') : `<div class="text-center py-16 bg-white rounded-[20px] text-[#627284] font-bold"><i data-lucide="receipt" class="w-10 h-10 mx-auto mb-2 opacity-30"></i><p>${statusFilter === 'unpaid' ? '沒有未付款的支出' : selectedMonth === 'all' && statusFilter === 'all' ? '尚無支出紀錄' : '沒有符合的紀錄'}</p></div>`;
       icons();
     }
 
@@ -1299,11 +1312,14 @@
       if (x.splitMethod === '代墊') { const o = parts.filter(p => p !== payer); return o.includes(name) ? amt / o.length : 0; }
       return parts.includes(name) && parts.length ? amt / parts.length : 0;
     }
-    function renderRecSummary(list) {
-      const total = list.reduce((s, x) => s + (parseFloat(x.amount) || 0) * (rates[x.currency] || 1), 0);
+    function renderRecSummary(all) {
+      const list = all.filter(x => !isUnpaid(x)), unp = all.filter(isUnpaid);
+      const twdOf = (x) => (parseFloat(x.amount) || 0) * (rates[x.currency] || 1);
+      const total = list.reduce((s, x) => s + twdOf(x), 0), unTotal = unp.reduce((s, x) => s + twdOf(x), 0);
       $('recTotal').textContent = ntd(total);
       const curs = [...new Set(list.map(x => x.currency).filter(c => c && c !== 'TWD'))];
       $('recTotalSub').textContent = curs.length ? `含 ${curs.join('、')}，依帳本匯率換算${selectedMonth === 'all' ? '' : ' · 本月'}` : (selectedMonth === 'all' ? '' : '本月');
+      $('recUnpaid').innerHTML = unp.length ? `<button onclick="window.setStatusFilter('unpaid')" class="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border border-dashed border-[#D9B98C] bg-[#FBF5EC] text-[#8E5F22]"><span class="flex items-center gap-1.5 text-xs font-black"><i data-lucide="clock" class="w-3.5 h-3.5"></i>未付款 ${unp.length} 筆</span><span class="text-xs font-black">${ntd(unTotal)} · 預計總花費 ${ntd(total + unTotal)}</span></button>` : '';
       $('recPeopleCount').textContent = `${people.length} 位旅伴`;
       const key = 'tm_me_' + activeTripId;
       let me = localStorage.getItem(key);
@@ -1322,6 +1338,24 @@
     };
 
     window.setMonthFilter = (v) => { selectedMonth = v; renderExpenses(); };
+    let statusFilter = 'all';
+    const isUnpaid = (x) => x && x.status === 'unpaid';
+    window.setStatusFilter = (v) => { statusFilter = v; renderExpenses(); };
+    window.markExpensePaid = async (id) => {
+      if (!isAuthed || !activeTripId) return;
+      const e = expensesCache[id]; if (e) { e.status = 'paid'; renderExpenses(); }
+      try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', `expenses_${activeTripId}`, id), { status: 'paid', paid_at: Date.now() }); }
+      catch (err) { console.error(err); alert('更新失敗，請稍後再試'); }
+    };
+    let expStatus = 'paid';
+    window.setExpStatus = (v) => {
+      expStatus = v;
+      const on = 'flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-black bg-white text-[#293C4E] shadow-sm', off = 'flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-black text-[#556576]';
+      $('expStPaid').className = v === 'paid' ? on : off;
+      $('expStUnpaid').className = v === 'unpaid' ? on.replace('text-[#293C4E]', 'text-[#8E5F22]') : off;
+      $('expStHint').toggleAttribute('x-hidden', v !== 'unpaid');
+      $('expPayerLabel').textContent = v === 'unpaid' ? '預計支付人' : '支付人';
+    };
 
     window.previewImage = (id) => {
       const exp = expensesCache[id];
@@ -1377,7 +1411,7 @@
       const targetRate = rates[sumCur] || 1;
       const pairDebts = {};
       expenses.forEach(exp => {
-        if (exp.splitMethod === '請客') return;
+        if (exp.splitMethod === '請客' || isUnpaid(exp)) return;
         const rate = rates[exp.currency] || 1;
         const amountTWD = (parseFloat(exp.amount) || 0) * rate;
         const payer = String(exp.payer);
@@ -1416,7 +1450,7 @@
       const targetRate = rates[sumCur] || 1;
       const details = [];
       expenses.forEach(exp => {
-        if (exp.splitMethod === '請客') return;
+        if (exp.splitMethod === '請客' || isUnpaid(exp)) return;
         const payer = String(exp.payer);
         const parts = exp.participants || [];
         const rate = rates[exp.currency] || 1;
@@ -1520,6 +1554,7 @@
       $('expPayer').value = people[0] || '';
       $('expDate').value = new Date().toISOString().split('T')[0];
       $('expScheduleTime').value = '';
+      window.setExpStatus('paid');
       window.buildItinLinkOpts('');
       $('imgLabel').innerHTML = `<i data-lucide="camera" class="w-6 h-6"></i><span class="text-[10px] mt-1 font-bold">收據</span>`;
       updateParticipantsUI();
@@ -1552,6 +1587,7 @@
       $('expPayer').value = exp.payer || (people[0] || '');
       $('expDate').value = exp.date || new Date().toISOString().split('T')[0];
       $('expScheduleTime').value = exp.scheduleTime || '';
+      window.setExpStatus(isUnpaid(exp) ? 'unpaid' : 'paid');
       window.buildItinLinkOpts(exp.itinId || '');
       $('imgLabel').innerHTML = previewUrl ? `<img src="${previewUrl}" alt="收據" class="w-full h-full object-cover" />` : `<i data-lucide="camera" class="w-6 h-6"></i><span class="text-[10px] mt-1 font-bold">收據</span>`;
       updateParticipantsUI();
@@ -1641,6 +1677,7 @@
           date: $('expDate').value,
           scheduleTime: $('expScheduleTime').value.trim(),
           itinId: $('expItinLink').value || null,
+          status: expStatus,
           splitMethod: $('expSplitMethod').value,
           payer: $('expPayer').value,
           participants: [...participants],
