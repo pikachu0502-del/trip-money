@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="app-version" content="1018v1" />
   <title>旅遊分帳</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
@@ -80,7 +81,7 @@
           <span class="flex items-center gap-1 min-w-0"><span id="currentTripName" class="text-[15px] font-black text-[#293C4E] truncate max-w-[13rem]">載入中...</span><i data-lucide="chevron-down" class="w-4 h-4 shrink-0 text-[#556576]"></i></span>
         </span>
       </button>
-      <span class="shrink-0 text-[10px] font-black tracking-[0.2em] text-[#556576]">TRIP MONEY</span>
+      <span class="shrink-0 flex items-baseline gap-1.5"><span class="text-[10px] font-black tracking-[0.2em] text-[#556576]">TRIP MONEY</span><span id="appVersion" title="版本" class="text-[10px] font-bold text-[#627284]">1018v1</span></span>
     </div>
 
     <!-- 首頁目次 -->
@@ -344,7 +345,7 @@
         </div>
 
         <div class="grid grid-cols-1 gap-2">
-          <div class="relative"><i data-lucide="map-pin" class="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400"></i><input id="expLocation" type="text" placeholder="地點" class="w-full pl-9 pr-2 py-2.5 border border-gray-100 rounded-lg bg-gray-50 focus:border-blue-500 outline-none text-sm font-bold" /></div>
+          <div class="space-y-2"><div class="relative"><i data-lucide="map-pin" class="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400"></i><input id="expLocation" type="text" autocomplete="off" enterkeyhint="search" placeholder="地點：搜尋店名，或貼上 Google Maps 網址／座標" oninput="window.onExpLocInput()" class="w-full pl-9 pr-2 py-2.5 border border-gray-100 rounded-lg bg-gray-50 focus:border-blue-500 outline-none text-sm font-bold" /></div><div id="exSuggest"></div><div id="exPlaceCard"></div><div id="exPlaceMeta"></div></div>
           <div class="relative"><i data-lucide="align-left" class="w-3.5 h-3.5 absolute left-3 top-3 text-gray-400"></i><input id="expRemarks" maxlength="50" type="text" placeholder="備註 (50字內)" class="w-full pl-9 pr-2 py-2.5 border border-gray-100 rounded-lg bg-gray-50 focus:border-blue-500 outline-none text-sm font-bold" /></div>
         </div>
 
@@ -1563,6 +1564,7 @@
       $('expNote').value = it.title || '';
       $('expLocation').value = it.location || '';
       $('expDate').value = it.date || todayStr();
+      window.exResetPlace(hasGeo(it) ? it : null);
       const cat = ITIN2CAT[it.type]; if (cat && CATEGORIES.includes(cat)) $('expCategory').value = cat;
       window.buildItinLinkOpts(id);
     };
@@ -1589,6 +1591,7 @@
       $('expQty').value = 1;
       $('expTotalLabel').textContent = '—';
       $('expLocation').value = '';
+      window.exResetPlace(null);
       $('expRemarks').value = '';
       $('expCurrency').value = 'TWD';
       $('expCategory').value = '餐飲';
@@ -1622,6 +1625,7 @@
         $('expQty').value = q;
         $('expUnitPrice').value = exp.unitPrice != null ? exp.unitPrice : (exp.amount != null ? Math.round(exp.amount / q * 100) / 100 : ''); }
       $('expLocation').value = exp.location || '';
+      window.exResetPlace(hasGeo(exp) ? exp : null);
       $('expRemarks').value = exp.remarks || '';
       $('expCurrency').value = exp.currency || 'TWD';
       $('expCategory').value = exp.category || '餐飲';
@@ -1700,7 +1704,8 @@
         // 地點→經緯度（Nominatim，免金鑰）。若地點未變且已有座標則汿用。
         let geo = null;
         const prev = editingId ? expensesCache[editingId] : null;
-        if (locationText) {
+        if (exPicked()) geo = { lat: exDraftGeo.lat, lng: exDraftGeo.lng };
+        else if (locationText) {
           if (prev && prev.location === locationText && prev.lat != null) {
             geo = { lat: prev.lat, lng: prev.lng };
           } else {
@@ -1733,6 +1738,17 @@
         };
         if (editingId) await updateDoc(doc(col, editingId), data);
         else await addDoc(col, data);
+        if (editingId && geo && lodgeHasGeo(geo)) {
+          const ls = (tripMeta.lodgings || []).map(l => ({ ...l }));
+          const l = ls.find(x => (x.expenseIds || (x.expenseId ? [x.expenseId] : [])).includes(editingId));
+          if (l && (!lodgeHasGeo(l) || Math.abs(l.lat - geo.lat) > 1e-6 || Math.abs(l.lng - geo.lng) > 1e-6)) {
+            l.lat = geo.lat; l.lng = geo.lng; l._geoName = l.name;
+            try {
+              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'trip_settings', activeTripId), { meta: { lodgings: ls } }, { merge: true });
+              for (const id of (l.expenseIds || [])) if (id !== editingId) { try { await updateDoc(doc(col, id), { lat: geo.lat, lng: geo.lng }); } catch (e) {} }
+            } catch (e) { console.warn('住宿位置同步失敗', e); }
+          }
+        }
         window.closeModal('addExpenseModal');
         window.openModal('successModal');
       } catch (err) {
@@ -1974,7 +1990,17 @@
       return null;
     }
     const lodgeHasGeo = (l) => l && l.lat != null && l.lng != null && !(l.lat === 0 && l.lng === 0);
+    // 住宿位置以「記帳頁的住宿支出」為準：若使用者在支出中改過地點，優先採用
+    function lodgeExpGeo(l) {
+      const ids = l.expenseIds || (l.expenseId ? [l.expenseId] : []);
+      const geos = ids.map(id => expensesCache[id]).filter(e => e && lodgeHasGeo(e));
+      if (!geos.length) return null;
+      const diff = lodgeHasGeo(l) ? geos.find(e => Math.abs(e.lat - l.lat) > 1e-6 || Math.abs(e.lng - l.lng) > 1e-6) : null;
+      const e = diff || geos[0];
+      return { lat: e.lat, lng: e.lng };
+    }
     function lodgeGeoOf(l, all) {
+      const eg = lodgeExpGeo(l); if (eg) return eg;
       if (lodgeHasGeo(l)) return { lat: l.lat, lng: l.lng };
       const n = (l.name || '').trim(); if (!n) return null;
       const m = (all || []).find(o => o !== l && (o.name || '').trim() === n && lodgeHasGeo(o));
@@ -2439,7 +2465,7 @@
       window.openAddExpense();
       if (!$('addExpenseModal').classList.contains('active')) return;
       if (title) $('expNote').value = title;
-      if (loc) $('expLocation').value = loc;
+      if (loc) { $('expLocation').value = loc; window.exResetPlace(null); }
       if (d) $('expDate').value = d;
       $('expScheduleTime').value = t || '';
       if (CATEGORIES.includes('餐飲')) $('expCategory').value = '餐飲';
@@ -2483,6 +2509,159 @@
       const g = guessType(name, osm);
       if (g && g !== $('itType').value) { $('itType').value = g; $('itTypeHint').textContent = '已依名稱建議，可修改'; renderItinTypeChips(); }
     }
+    // ===== 記帳地點：搜尋建議 + 小地圖預覽（與行程相同方式）=====
+    let exDraftGeo = null, exSugList = [], exSugTimer = null, exSugSeq = 0, exGeoSeq = 0, exMap = null, exMarker = null;
+    const exPicked = () => !!(exDraftGeo && hasGeo(exDraftGeo) && $('expLocation').value.trim() === (exDraftGeo.label || ''));
+    function exBias() {
+      const d = $('expDate').value, lg = d ? lodgingForDate(d) : null;
+      if (lg && hasGeo(lg)) return { center: { lat: lg.lat, lng: lg.lng }, from: '當日住宿' };
+      const day = d ? itinDayItems(d).filter(hasGeo) : [];
+      const ls = tripMeta.lodgings || [];
+      const pts = day.length ? day : [...itinerary.filter(hasGeo), ...ls.map(l => lodgeGeoOf(l, ls)).filter(hasGeo)];
+      if (!pts.length) return null;
+      return { center: { lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length, lng: pts.reduce((s, p) => s + p.lng, 0) / pts.length }, from: day.length ? '當日行程' : '旅程地點' };
+    }
+    function exRecent() {
+      const m = new Map();
+      recentPlaces().forEach(p => { if (p.lat != null) m.set(p.name, { name: p.name, loc: p.loc, lat: p.lat, lng: p.lng, type: p.type }); });
+      expenses.forEach(e => { const n = (e.location || '').trim(); if (n && hasGeo(e) && !m.has(n)) m.set(n, { name: n, loc: '', lat: e.lat, lng: e.lng, type: e.category === '餐飲' ? '餐廳' : '其他' }); });
+      return [...m.values()];
+    }
+    function exSetPin(lat, lng, o = {}) {
+      const seq = ++exGeoSeq;
+      const label = o.label != null ? o.label : (exDraftGeo && exDraftGeo.label && !/^-?\d+\.\d+, -?\d+\.\d+$/.test(exDraftGeo.label) ? exDraftGeo.label : coordText(lat, lng));
+      exDraftGeo = { lat, lng, label, addr: o.addr || '', manual: !!o.manual, src: o.src || '' };
+      $('expLocation').value = label;
+      exRenderMeta();
+      if (o.addr) return;
+      reverseGeo(lat, lng).then(addr => {
+        if (seq !== exGeoSeq || !exDraftGeo || !addr) return;
+        exDraftGeo.addr = addr;
+        if (/^-?\d+\.\d+, -?\d+\.\d+$/.test(exDraftGeo.label)) { exDraftGeo.label = addr.split(',')[0]; $('expLocation').value = exDraftGeo.label; }
+        exPinInfo();
+      });
+    }
+    function exSugRow(p, i) {
+      const t = ITIN_TYPES[p.type] || ITIN_TYPES['其他'], far = p.dist != null && p.dist > 30;
+      return `<button type="button" onmousedown="event.preventDefault()" onclick="window.exPick(${i})" class="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-[#E3EBF2] min-h-[48px]"><i data-lucide="${p.recent ? 'history' : t.icon}" class="w-4 h-4 shrink-0" style="color:${p.recent ? '#627284' : t.color}"></i><span class="min-w-0 flex-1"><span class="block text-sm font-black text-[#293C4E] truncate">${esc(p.name)}</span>${p.loc && p.loc !== p.name ? `<span class="block text-[11px] font-bold text-[#627284] leading-snug line-clamp-2">${esc(p.loc)}</span>` : ''}</span>${p.dist != null ? `<span class="shrink-0 text-[10px] font-black px-1.5 py-0.5 rounded-md ${far ? 'bg-[#F8EEDF] text-[#8E5F22]' : 'text-[#627284]'}">${fmtKm(p.dist)}</span>` : ''}</button>`;
+    }
+    const exTip = (msg) => `<div class="flex items-center gap-2 px-3 py-2 border-t border-[#E6EAEE] text-[11px] font-bold text-[#627284]"><span class="min-w-0 flex-1 leading-snug">${msg || '找不到正確地點？'}可貼上 Google Maps 網址或座標</span><button type="button" onmousedown="event.preventDefault()" onclick="window.exPickOnMap()" class="shrink-0 whitespace-nowrap h-9 px-3 rounded-lg bg-[#E1E7ED] text-[#3D6280] font-black flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i>在地圖上選</button></div>`;
+    function exRenderSuggest(q, remote, short) {
+      const box = $('exSuggest');
+      if (short) { exSugList = []; box.innerHTML = `<div class="rounded-xl border border-[#DFE3E8] bg-white p-1"><div class="px-3 py-2 text-[11px] font-bold text-[#8E5F22]">短網址（maps.app.goo.gl）無法直接讀取位置。請在瀏覽器開啟後複製完整網址，或在 Google Maps 長按地點複製座標。</div>${exTip(' ')}</div>`; icons(); return; }
+      if (!q || q.length < 2) { exSugList = []; box.innerHTML = ''; return; }
+      const ql = q.toLowerCase(), b = exBias();
+      const loc = exRecent().filter(p => p.name.toLowerCase().includes(ql) && p.name !== q).slice(0, 3).map(p => ({ ...p, recent: true, dist: b ? haversineKm(b.center, p) : null }));
+      let rem = (remote || []).map(r => {
+        const nm = r.name || (r.display_name || '').split(',')[0].trim();
+        const o = { name: nm, loc: (r.display_name || '').split(',').map(s => s.trim()).filter(s => s !== '日本').slice(1, 5).join(', '), lat: parseFloat(r.lat), lng: parseFloat(r.lon), type: guessType(nm, r) || '其他' };
+        if (b && !isNaN(o.lat)) o.dist = haversineKm(b.center, o);
+        return o;
+      }).filter(r => r.name && !isNaN(r.lat));
+      if (b) rem = [...rem.filter(r => r.dist <= 60), ...rem.filter(r => r.dist > 60)];
+      exSugList = [...loc, ...rem];
+      const pending = remote == null, none = remote && !rem.length;
+      box.innerHTML = `<div class="rounded-xl border border-[#DFE3E8] bg-white p-1 shadow-sm">
+        ${loc.map((p, i) => exSugRow(p, i)).join('')}
+        ${rem.length && b ? `<div class="px-3 pt-1.5 pb-0.5 text-[10px] font-bold text-[#627284]">距離以${b.from}為準，請核對地址與距離</div>` : ''}
+        ${rem.map((p, j) => exSugRow(p, loc.length + j)).join('')}
+        ${pending ? `<div class="flex items-center gap-2 px-3 py-2.5 text-[11px] font-bold text-[#627284]"><i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>搜尋地點中…</div>` : ''}
+        ${remote ? exTip(none ? '找不到符合的地點。' : '') : ''}
+      </div>`;
+      icons();
+    }
+    window.onExpLocInput = () => {
+      const q = $('expLocation').value.trim();
+      const g = parseGeoText(q);
+      if (g) {
+        clearTimeout(exSugTimer); exSugSeq++;
+        if (g.short) { exRenderSuggest('', null, true); return; }
+        $('exSuggest').innerHTML = '';
+        exDraftGeo = null;
+        exSetPin(g.lat, g.lng, { label: g.name || coordText(g.lat, g.lng), src: 'paste' });
+        return;
+      }
+      clearTimeout(exSugTimer); const seq = ++exSugSeq;
+      exRenderMeta();
+      if (exPicked() || q.length < 2) { exRenderSuggest('', null); return; }
+      exRenderSuggest(q, null);
+      exSugTimer = setTimeout(async () => {
+        let arr = [];
+        try {
+          const b = exBias(), c = b && b.center;
+          const vb = c ? `&viewbox=${c.lng - 0.6},${c.lat + 0.4},${c.lng + 0.6},${c.lat - 0.4}` : '';
+          const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&q=${encodeURIComponent(q)}${vb}`, { headers: { 'Accept-Language': 'zh-TW' } });
+          arr = await r.json();
+        } catch (e) { console.warn('地點搜尋失敗', e); }
+        if (seq !== exSugSeq) return;
+        exRenderSuggest($('expLocation').value.trim(), Array.isArray(arr) ? arr : []);
+        exRenderMeta();
+      }, 650);
+    };
+    window.exPick = (i) => {
+      const p = exSugList[i]; if (!p) return;
+      clearTimeout(exSugTimer); exSugSeq++; $('exSuggest').innerHTML = '';
+      exSetPin(p.lat, p.lng, { label: p.name, addr: p.loc || '', src: p.recent ? 'recent' : 'search' });
+    };
+    window.exPickOnMap = () => {
+      clearTimeout(exSugTimer); exSugSeq++; $('exSuggest').innerHTML = '';
+      const b = exBias(), c = b ? b.center : DEF_CENTER;
+      const label = $('expLocation').value.trim();
+      exSetPin(c.lat, c.lng, { label: label && !parseGeoText(label) ? label : coordText(c.lat, c.lng), manual: true, src: 'map' });
+      if (exDraftGeo) { exDraftGeo.unset = true; exPinInfo(); }
+    };
+    window.exChangePlace = () => {
+      exGeoSeq++; exDraftGeo = null; exRenderMeta();
+      setTimeout(() => { $('expLocation').focus(); window.onExpLocInput(); }, 30);
+    };
+    function exPinInfo() {
+      const el = $('exPinInfo'); if (!el || !exDraftGeo) return;
+      const g = exDraftGeo, b = exBias(), d = b ? haversineKm(b.center, g) : null, far = d != null && d > 30;
+      el.innerHTML = `<div class="flex items-start gap-2.5">
+          <i data-lucide="${g.unset ? 'hand' : 'map-pin-check'}" class="w-4 h-4 mt-0.5 shrink-0" style="color:${g.unset ? '#8E5F22' : '#26685E'}"></i>
+          <div class="min-w-0 flex-1">
+            <div class="text-[13px] font-black text-[#293C4E] leading-snug">${g.unset ? '拖曳圖釘或點地圖，放到正確位置' : esc(g.addr || g.label || coordText(g.lat, g.lng))}</div>
+            <div class="text-[10px] font-bold text-[#627284] mt-0.5">${g.manual && !g.unset ? '已手動調整 · ' : g.src === 'paste' ? '由網址／座標定位 · ' : ''}${coordText(g.lat, g.lng)}${d != null ? ` · 距${b.from} ${fmtKm(d)}` : ''}</div>
+          </div>
+          <button type="button" onclick="window.exChangePlace()" class="shrink-0 h-9 px-3 -mr-1 rounded-lg bg-[#E1E7ED] text-[#3D6280] text-xs font-black">重新搜尋</button>
+        </div>
+        ${far && !g.unset ? `<div class="mt-2 flex gap-1.5 px-2.5 py-2 rounded-lg bg-[#F8EEDF] text-[#8E5F22] text-[11px] font-bold"><i data-lucide="alert-triangle" class="w-3.5 h-3.5 shrink-0 mt-px"></i><span>離${b.from}有 ${fmtKm(d)}，可能定位到同名的其他地點。請確認地址，或拖曳圖釘調整。</span></div>` : ''}
+        ${!g.unset && !far ? `<div class="mt-1.5 text-[10px] font-bold text-[#627284]">位置不對？直接拖曳圖釘或點地圖修正</div>` : ''}`;
+      icons();
+    }
+    function exRenderCard(g) {
+      const box = $('exPlaceCard');
+      if (!g) { if (exMap) { exMap.remove(); exMap = null; exMarker = null; } box.innerHTML = ''; return; }
+      if (exMap && $('exMiniMap')) {
+        const cur = exMarker.getLatLng();
+        if (Math.abs(cur.lat - g.lat) > 1e-7 || Math.abs(cur.lng - g.lng) > 1e-7) { exMarker.setLatLng([g.lat, g.lng]); if (!exMap.getBounds().pad(-0.15).contains([g.lat, g.lng])) exMap.panTo([g.lat, g.lng]); }
+        exPinInfo(); return;
+      }
+      box.innerHTML = `<div class="rounded-xl border border-[#DFE3E8] bg-white overflow-hidden"><div id="exMiniMap" class="h-40 bg-[#E1E7ED]" style="isolation:isolate"></div><div id="exPinInfo" class="px-3.5 py-3"></div></div>`;
+      exPinInfo();
+      if (typeof L === 'undefined') return;
+      exMap = L.map('exMiniMap', { zoomControl: true, scrollWheelZoom: false }).setView([g.lat, g.lng], g.unset ? 14 : 17);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(exMap);
+      exMarker = L.marker([g.lat, g.lng], { draggable: true, autoPan: true, icon: L.divIcon({ className: '', iconSize: [30, 30], iconAnchor: [15, 30], html: '<div style="width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#527C9B;border:3px solid #fff;box-shadow:0 2px 6px rgba(41,60,78,.45)"></div>' }) }).addTo(exMap);
+      const moveTo = (ll) => exSetPin(ll.lat, ll.lng, { manual: true });
+      exMarker.on('dragend', () => moveTo(exMarker.getLatLng()));
+      exMap.on('click', (e) => { exMarker.setLatLng(e.latlng); moveTo(e.latlng); });
+      setTimeout(() => exMap && exMap.invalidateSize(), 120);
+    }
+    function exRenderMeta() {
+      const ok = exPicked(), loc = $('expLocation').value.trim();
+      exRenderCard(ok ? exDraftGeo : null);
+      const sugOpen = !!$('exSuggest').firstElementChild;
+      $('exPlaceMeta').innerHTML = ok || !loc || sugOpen ? ''
+        : `<div class="flex items-center gap-1.5 px-1 text-[11px] font-bold text-[#627284]"><span class="min-w-0 flex-1 truncate">未定位 · 儲存時依名稱自動定位</span><button type="button" onclick="window.exPickOnMap()" class="shrink-0 whitespace-nowrap h-9 px-3 -my-1.5 rounded-lg bg-[#E1E7ED] text-[#3D6280] font-black flex items-center gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5"></i>在地圖上選</button></div>`;
+      icons();
+    }
+    window.exResetPlace = (g) => {
+      clearTimeout(exSugTimer); exSugSeq++; exGeoSeq++;
+      $('exSuggest').innerHTML = '';
+      exDraftGeo = g && hasGeo(g) ? { lat: g.lat, lng: g.lng, label: $('expLocation').value.trim(), addr: g.addr || '', src: 'saved' } : null;
+      exRenderMeta();
+    };
     let itMiniMap = null, itMiniMarker = null, itGeoSeq = 0;
     const DEF_CENTER = { lat: 25.033, lng: 121.565 };
     function tripBias(date) {
@@ -3300,6 +3479,11 @@
       const loader = $('lodgeSaveLoader'); loader.classList.add('active');
       try {
         for (const l of lodgingDraft) {
+          const old = (tripMeta.lodgings || []).find(o => (o.expenseIds || []).length && JSON.stringify(o.expenseIds) === JSON.stringify(l.expenseIds || []));
+          const eg = old && old.name === l.name ? lodgeExpGeo(old) : null;
+          if (eg) { l.lat = eg.lat; l.lng = eg.lng; l._geoName = l.name; }
+        }
+        for (const l of lodgingDraft) {
           if (l.name && (!lodgeHasGeo(l) || l._geoName !== l.name)) {
             const same = lodgingDraft.find(o => o !== l && o.name === l.name && lodgeHasGeo(o) && (o._geoName === o.name || o._geoName == null));
             if (same) { l.lat = same.lat; l.lng = same.lng; l._geoName = l.name; continue; }
@@ -3432,6 +3616,7 @@
       try {
         const b = JSON.parse(await f.text());
         if (b.app !== 'trip-money' || !b.settings) throw new Error('format');
+        if (b.appVersion) console.info('備份版本', b.appVersion);
         showBackupPreview(b);
       } catch (err) { alert('這不是 Trip Money 的備份檔，或檔案已損壞'); input.value = ''; }
     };
