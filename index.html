@@ -2016,9 +2016,18 @@
     const legKey = (mode, a, b) => `${mode}|${a.lat.toFixed(5)},${a.lng.toFixed(5)}|${b.lat.toFixed(5)},${b.lng.toFixed(5)}`;
     function legText(mode, min, km, approx) { return `${TRAVEL_MODES[mode].label} ${approx ? '約 ' : ''}${fmtMin(min)}${km != null ? ' · ' + fmtKm(km) : ''}`; }
     const BUFFER_MIN = 10;
-    function legWarn(gap, min) {
+    function isLodgeStop(x) {
+      if (!x || x._flight || x._spend) return false;
+      if (x.type === '住宿') return true;
+      const lg = x.date ? lodgingForDate(x.date) : null;
+      if (!lg || !lg.name) return false;
+      const n = lg.name.trim();
+      return (x.title || '').trim() === n || (x.location || '').trim() === n || (hasGeo(lg) && hasGeo(x) && haversineKm(lg, x) < 0.05);
+    }
+    function legWarn(gap, min, noBuf) {
       if (gap == null || gap < 0) return '';
       if (gap < min) return `交通約 ${fmtMin(min)}，僅預留 ${fmtMin(gap)}，可能遲到`;
+      if (noBuf) return '';
       if (gap < min + BUFFER_MIN) return `交通緩衝僅 ${gap - min} 分鐘（建議至少 ${BUFFER_MIN} 分鐘）`;
       return '';
     }
@@ -2049,7 +2058,7 @@
         const L = legData(items[i - 1], it);
         if (!L || (L.km0 != null && L.km0 < 0.03) || L.gap == null || L.gap < 0) return;
         if (L.gap < L.min) out.push({ t: 'late', i, text: `第 ${i} → ${i + 1} 站交通時間不足`, sub: `${TRAVEL_MODES[L.mode].label}約 ${fmtMin(L.min)}，僅預留 ${fmtMin(L.gap)}` });
-        else if (L.gap < L.min + BUFFER_MIN) out.push({ t: 'buffer', i, text: `第 ${i} → ${i + 1} 站緩衝不足`, sub: `抵達後只剩 ${L.gap - L.min} 分鐘，建議預留 ${BUFFER_MIN} 分鐘以上` });
+        else if (L.gap < L.min + BUFFER_MIN && !isLodgeStop(it)) out.push({ t: 'buffer', i, text: `第 ${i} → ${i + 1} 站緩衝不足`, sub: `抵達後只剩 ${L.gap - L.min} 分鐘，建議預留 ${BUFFER_MIN} 分鐘以上` });
       });
       const g = items.map((it, i) => ({ it, i })).filter(x => hasGeo(x.it));
       const d = (a, b) => (a && b) ? haversineKm(a.it, b.it) : 0;
@@ -2093,10 +2102,11 @@
       if (!L) return edit ? `<div ${open} class="leg-plain flex items-center gap-1.5 pl-[4.25rem] py-2 text-[11px] font-bold text-[#627284] cursor-pointer hover:text-[#3D6280]"><i data-lucide="route" class="w-3.5 h-3.5"></i>${prev.location && cur.location ? '交通時間待確認' : '交通'}<span class="px-2 py-0.5 rounded-full bg-[#E1E7ED] text-[#3D6280]">設定</span></div>` : '';
       const { km0, mode, key, hit, min, km, gap, manual } = L;
       if (!manual && km0 < 0.03) return '';
-      const warn = legWarn(gap, min);
+      const noBuf = isLodgeStop(cur);
+      const warn = legWarn(gap, min, noBuf);
       const gm = hasGeo(prev) && hasGeo(cur) ? `https://www.google.com/maps/dir/?api=1&origin=${prev.lat},${prev.lng}&destination=${cur.lat},${cur.lng}&travelmode=${TRAVEL_MODES[mode].gm}` : '';
       const pending = !manual && !hit && TRAVEL_MODES[mode].osrm;
-      return `<div class="travel-leg" ${key && !manual ? `data-key="${esc(key)}"` : ''} data-gap="${gap == null ? '' : gap}" ${pending ? 'data-pending="1"' : ''}>
+      return `<div class="travel-leg" ${key && !manual ? `data-key="${esc(key)}"` : ''} data-gap="${gap == null ? '' : gap}" ${noBuf ? 'data-nobuf="1"' : ''} ${pending ? 'data-pending="1"' : ''}>
         <div ${open} class="flex items-center gap-1.5 pl-[4.25rem] pr-1 py-2 text-[11px] font-bold text-[#556576] ${edit ? 'cursor-pointer rounded-lg hover:bg-[#E3E8EE]' : ''}">
           <i data-lucide="${TRAVEL_MODES[mode].icon}" class="w-3.5 h-3.5 shrink-0"></i>
           <span class="leg-text truncate min-w-0">${manual ? `${TRAVEL_MODES[mode].label} ${fmtMin(min)}` : legText(mode, min, km, !hit || TRAVEL_MODES[mode].base === 'transit')}</span>
@@ -2138,7 +2148,7 @@
             node.removeAttribute('data-pending');
             node.querySelector('.leg-text').textContent = legText(mode, hit.min, hit.km, false);
             const g = node.dataset.gap === '' ? null : +node.dataset.gap;
-            const w = legWarn(g, hit.min), wEl = node.querySelector('.leg-warn');
+            const w = legWarn(g, hit.min, node.dataset.nobuf === '1'), wEl = node.querySelector('.leg-warn');
             wEl.textContent = w;
             if (w) wEl.removeAttribute('x-hidden'); else wEl.setAttribute('x-hidden', '');
           });
@@ -2195,6 +2205,19 @@
       } catch (e) { console.error(e); alert('順序儲存失敗，請稍後再試'); }
     }
     window.setItinView = (v) => { itinView = v; renderItinerary(); };
+    function lodgeIns(prev, cur, idx) {
+      const lg = lodgingForDate(selectedItinDate);
+      if (!lg || !lg.name || prev._flight || toMinOfDay(prev.time) == null) return '';
+      const n = lg.name.trim();
+      const isL = x => x && (x.type === '住宿' || (x.title || '').trim() === n || (x.location || '').trim() === n || (hasGeo(lg) && hasGeo(x) && haversineKm(lg, x) < 0.05));
+      if (isL(prev) || isL(cur)) return '';
+      return `<div class="leg-plain pl-[3.75rem] -mb-1.5"><button onclick="window.insertLodgeStop(${idx})" title="在這兩站之間插入回住宿" class="h-8 px-2 rounded-full flex items-center gap-1 text-[11px] font-black text-[#5F5590] hover:bg-[#EAE7F3]"><i data-lucide="plus" class="w-3.5 h-3.5"></i>回住宿</button></div>`;
+    }
+    window.insertLodgeStop = (i) => {
+      const prev = curDayItems[i - 1], lg = lodgingForDate(selectedItinDate);
+      if (!prev || !lg) return;
+      window.openAddItin({ date: selectedItinDate, after: prev, lodge: lg });
+    };
     window.focusStop = (i) => {
       const m = itinMarkers[i];
       if (!m || !itinMap) return;
@@ -2355,7 +2378,7 @@
         let warn = '';
         if (st != null && prevEnd != null && st < prevEnd) warn = `與上一行程重疊 ${fmtMin(prevEnd - st)}`;
         if (st != null) prevEnd = Math.max(prevEnd || 0, st + (+it.duration || 0));
-        const leg = idx ? travelLeg(items[idx - 1], it, idx) : '';
+        const leg = idx ? (isMap ? '' : lodgeIns(items[idx - 1], it, idx)) + travelLeg(items[idx - 1], it, idx) : '';
         const { icon, color, sub, click } = itemLook(it);
         if (isMap) return leg + `<div class="flex gap-3 items-center">
           <div class="w-14 shrink-0 flex justify-center"><span class="w-7 h-7 rounded-full text-white text-xs font-black flex items-center justify-center ${hasGeo(it) ? '' : 'opacity-50'}" style="background:${color}">${idx + 1}</span></div>
@@ -2432,7 +2455,7 @@
       ['餐廳', /餐|食堂|拉麵|ラーメン|壽司|寿司|燒肉|焼肉|咖啡|cafe|café|restaurant|居酒屋|甜點|水產|丼|麵|午飯|晚飯|早飯/i],
       ['景點', /神社|神宮|寺|宮|公園|博物館|美術館|館$|塔|城|展望|museum|park|temple|shrine|動物園|水族館|夜景|海灘|瀑布|山$|景/i]
     ];
-    let itDraftGeo = null, itTypeTouched = false, itTimeTouched = false, itNextMode = false, itSugList = [], itSugTimer = null, itSugSeq = 0;
+    let itAfterRef = null, itDraftGeo = null, itTypeTouched = false, itTimeTouched = false, itNextMode = false, itSugList = [], itSugTimer = null, itSugSeq = 0;
     function guessType(name, osm) {
       if (osm) {
         const c = osm.class || '', t = osm.type || '';
@@ -2667,7 +2690,9 @@
     function itinSuggestTime() {
       if (editingItinId) return null;
       let prev = null, pe = -1;
-      itinDayItems($('itDate').value).forEach(x => { if (isSelfItem(x)) return; const s = toMinOfDay(x.time); if (s == null) return; const e = s + (+x.duration || 0); if (e >= pe) { pe = e; prev = x; } });
+      if (itAfterRef && itAfterRef.date && itAfterRef.date !== $('itDate').value) itAfterRef = null;
+      if (itAfterRef && toMinOfDay(itAfterRef.time) != null) { prev = itAfterRef; pe = toMinOfDay(prev.time) + (+prev.duration || 0); }
+      else itinDayItems($('itDate').value).forEach(x => { if (isSelfItem(x)) return; const s = toMinOfDay(x.time); if (s == null) return; const e = s + (+x.duration || 0); if (e >= pe) { pe = e; prev = x; } });
       if (!prev) return null;
       let travel = 15, how = '預留 15 分鐘交通';
       const tv = $('itTransport').value;
@@ -2747,7 +2772,7 @@
     window.openAddItin = (opts) => {
       opts = opts && typeof opts === 'object' && !opts.target ? opts : {};
       if (!activeTripId) { alert('請先選擇帳本'); return; }
-      editingItinId = null; itDraftGeo = null; itTypeTouched = false; itTimeTouched = false; itNextMode = !!opts.next;
+      editingItinId = null; itDraftGeo = null; itTypeTouched = false; itTimeTouched = false; itNextMode = !!opts.next; itAfterRef = opts.after || null;
       prepItinSheet(true);
       $('itinModalTitle').innerText = itNextMode ? '新增下一站' : '新增行程';
       ['itTitle', 'itLocation', 'itNote', 'itBooking', 'itDetail', 'itTime', 'itDuration'].forEach(k => $(k).value = '');
@@ -2756,13 +2781,24 @@
       $('itTransport').innerHTML = MODE_OPTS('auto').replace('自動判斷', '依旅程預設');
       $('itFixedSeg').dataset.val = '0'; $('itPrioSeg').dataset.val = '';
       renderItSeg('itFixedSeg'); renderItSeg('itPrioSeg'); renderItinTypeChips();
-      renderItinSuggest('', null); window.renderItinPlaceMeta(); window.refreshItinForm();
+      const lg = opts.lodge;
+      if (lg) {
+        itNextMode = true; itTypeTouched = true;
+        $('itinModalTitle').innerText = '插入回住宿';
+        $('itTitle').value = lg.name || '住宿'; $('itType').value = '住宿'; renderItinTypeChips();
+        $('itDuration').value = 15;
+        if (hasGeo(lg)) { itDraftGeo = { lat: lg.lat, lng: lg.lng, loc: lg.name || '', src: 'recent' }; $('itLocation').value = itDraftGeo.loc; }
+        else $('itLocation').value = lg.name || '';
+        $('itSuggest').innerHTML = '';
+      } else renderItinSuggest('', null);
+      window.renderItinPlaceMeta(); window.refreshItinForm();
       window.openModal('addItinModal'); fitSheets();
+      if (lg) return;
       if (window.matchMedia('(pointer:fine)').matches || itNextMode) setTimeout(() => $('itTitle').focus(), 80);
     };
     window.editItin = (id) => {
       const it = itineraryCache[id]; if (!it) return;
-      editingItinId = id; itTypeTouched = true; itTimeTouched = true; itNextMode = false;
+      editingItinId = id; itTypeTouched = true; itTimeTouched = true; itNextMode = false; itAfterRef = null;
       itDraftGeo = hasGeo(it) ? { lat: it.lat, lng: it.lng, loc: it.location || '', src: 'saved' } : null;
       prepItinSheet(false);
       $('itinModalTitle').innerText = '編輯行程';
